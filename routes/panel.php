@@ -36,7 +36,7 @@ Route::middleware(['auth', 'level:creator,admin'])
         Route::patch('/tickets/{ticket}/status', [AdminTicketController::class, 'status'])->name('tickets.status'); // 👈 برای تغییر وضعیت سریع
         Route::put('/tickets/{ticket}/close', [AdminTicketController::class, 'close'])->name('tickets.close');   // 👈 برای بستن تیکت
 
-        // مدیریت شرکت‌ها و دپارتمان‌ها
+        
         Route::resource('companies', CompanyController::class)->except(['show', 'destroy']);
         Route::resource('departments', DepartmentController::class)->except(['show', 'destroy']);
 
