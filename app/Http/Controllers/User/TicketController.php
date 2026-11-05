@@ -188,4 +188,4 @@ class TicketController extends Controller
 
         return back()->with('success', 'تیکت با موفقیت بسته شد.');
     }
-}
+}÷

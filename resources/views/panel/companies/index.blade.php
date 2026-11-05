@@ -17,7 +17,6 @@
                 <thead>
                     <tr>
                         <th>نام شرکت</th>
-                        <th>دامنه</th>
                         <th>وضعیت</th>
                         <th>تعداد دپارتمان‌ها</th>
                         <th>تعداد کاربران</th>
@@ -28,7 +27,6 @@
                     @forelse($companies as $company)
                         <tr>
                             <td class="fw-bold">{{ $company->name }}</td>
-                            <td>{{ $company->domain ?? '---' }}</td>
                             <td>
                                 @if($company->is_active)
                                     <span class="badge bg-success">فعال</span>

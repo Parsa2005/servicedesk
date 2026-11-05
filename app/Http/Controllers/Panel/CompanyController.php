@@ -28,14 +28,12 @@ class CompanyController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:companies,name'],
             'slug' => ['nullable', 'string', 'max:255', 'unique:companies,slug'],
-            'domain' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable','boolean'],
         ]);
 
         Company::create([
             'name' => $request->name,
             'slug' => Str::slug($request->name),
-            'domain' => $request->domain,
             'is_active' => $request->boolean('is_active'),
         ]);
 
@@ -54,14 +52,12 @@ class CompanyController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:companies,name,' . $company->id],
             'slug' => ['nullable', 'string', 'max:255', 'unique:companies,slug,' . $company->id],
-            'domain' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable','boolean'],
         ]);
 
         $company->update([
             'name' => $request->name,
             'slug' => $request->filled('slug') ? Str::slug($request->slug) : Str::slug($request->name),
-            'domain' => $request->domain,
             'is_active' => $request->boolean('is_active'),
         ]);
 
