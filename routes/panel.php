@@ -18,33 +18,38 @@ Route::middleware(['auth', 'level:creator,admin'])
     ->as('panel.')
     ->group(function () {
 
-        // داشبورد اصلی مدیریت
+       
         Route::get('/menu', [DashboardController::class, 'index'])->name('menu');
 
-        // مدیریت نقش‌ها (CRUD)
+      
         Route::resource('roles', RoleController::class)->except(['show']);
 
-        // مدیریت کاربران و ارتقاء سطح
+     
         Route::get('/users', [AdminController::class, 'index'])->name('users.index');
         Route::get('/users/{user}/edit', [AdminController::class, 'edit'])->name('users.edit');
         Route::put('/users/{user}', [AdminController::class, 'update'])->name('users.update');
 
-        // مدیریت تیکت‌ها در پنل ادمین
+        
         Route::get('/tickets', [AdminTicketController::class, 'index'])->name('tickets.index');
         Route::get('/tickets/{ticket}', [AdminTicketController::class, 'show'])->name('tickets.show');
         Route::post('/tickets/{ticket}/reply', [AdminTicketController::class, 'reply'])->name('tickets.reply');
-        Route::patch('/tickets/{ticket}/status', [AdminTicketController::class, 'status'])->name('tickets.status'); // 👈 برای تغییر وضعیت سریع
-        Route::put('/tickets/{ticket}/close', [AdminTicketController::class, 'close'])->name('tickets.close');   // 👈 برای بستن تیکت
+        Route::patch('/tickets/{ticket}/status', [AdminTicketController::class, 'status'])->name('tickets.status'); 
+        Route::put('/tickets/{ticket}/close', [AdminTicketController::class, 'close'])->name('tickets.close');   
 
         
-        Route::resource('companies', CompanyController::class)->except(['show', 'destroy']);
-        Route::resource('departments', DepartmentController::class)->except(['show', 'destroy']);
+        Route::resource('companies', CompanyController::class)->except(['destroy']);
+       
+        Route::delete('companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
 
-        // مدیریت عضویت‌های سازمانی
+        Route::resource('departments', DepartmentController::class)->except(['destroy']);
+
+        Route::delete('departments/{department}', [DepartmentController::class, 'destroy'])->name('departments.destroy');
+
+        
         Route::get('/membership', [MembershipController::class, 'index'])->name('membership.index');
         Route::get('/membership/{user}/edit', [MembershipController::class, 'edit'])->name('membership.edit');
         Route::put('/membership/{user}', [MembershipController::class, 'update'])->name('membership.update');
 
-
-        Route::resource('categories', TicketCategoryController::class)->except(['show']);
+        Route::resource('categories', TicketCategoryController::class)->except(['destroy']);
+        Route::delete('categories/{category}', [TicketCategoryController::class, 'destroy'])->name('categories.destroy');
     });
