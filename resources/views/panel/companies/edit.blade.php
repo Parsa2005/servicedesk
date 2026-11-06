@@ -3,7 +3,7 @@
 @section('title', 'ویرایش شرکت')
 
 @section('content')
-<div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
+<div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6" dir="rtl">
     <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
         <h2 class="text-xl font-bold text-slate-800">ویرایش اطلاعات شرکت: {{ $company->name }}</h2>
         <a href="{{ route('panel.companies.index') }}" class="text-sm text-slate-500 hover:text-slate-700">← بازگشت به لیست</a>
@@ -24,13 +24,27 @@
         @method('PUT')
 
         <div class="mb-4">
-            <label class="block text-sm font-medium text-slate-700 mb-1">نام شرکت</label>
+            <label class="block text-sm font-medium text-slate-700 mb-1">نام شرکت <span class="text-red-500">*</span></label>
             <input type="text" name="name" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 text-sm" value="{{ old('name', $company->name) }}" required>
         </div>
 
         <div class="mb-4">
             <label class="block text-sm font-medium text-slate-700 mb-1">اسلاگ (URL)</label>
             <input type="text" name="slug" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 text-sm bg-slate-50" value="{{ old('slug', $company->slug) }}" placeholder="اگر خالی بگذارید خودکار ساخته می‌شود">
+        </div>
+
+        <!-- 👈 فیلد انتخاب شرکت مادر (ساختار هرمی) -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-1">شرکت مادر (هرم سازمانی)</label>
+            <select name="parent_id" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 text-sm bg-white">
+                <option value="">-- بدون شرکت مادر (به عنوان شرکت مستقل / مادر اصلی) --</option>
+                @foreach($companies as $comp)
+                    <option value="{{ $comp->id }}" {{ old('parent_id', $company->parent_id) == $comp->id ? 'selected' : '' }}>
+                        {{ $comp->name }}
+                    </option>
+                @endforeach
+            </select>
+            <p class="text-xs text-slate-500 mt-1">شرکت نمی‌تواند مادر خودش باشد.</p>
         </div>
 
         <div class="mb-6 flex items-center gap-3">

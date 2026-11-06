@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->boolean('is_active')->default(true);
+            $table->foreignId('parent_id')->nullable()->constrained('companies')->cascadeOnDelete();
             $table->string('slug');
             $table->timestamps();
         });

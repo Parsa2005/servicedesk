@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container py-4">
+<div class="container py-4" dir="rtl">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>مدیریت شرکت‌ها</h2>
         <a href="{{ route('panel.companies.create') }}" class="btn btn-primary">افزودن شرکت جدید</a>
@@ -11,12 +11,17 @@
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
 
+    @if(session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
     <div class="card shadow-sm border-0">
         <div class="card-body">
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>
                         <th>نام شرکت</th>
+                        <th>شرکت مادر</th>
                         <th>وضعیت</th>
                         <th>تعداد دپارتمان‌ها</th>
                         <th>تعداد کاربران</th>
@@ -27,6 +32,13 @@
                     @forelse($companies as $company)
                         <tr>
                             <td class="fw-bold">{{ $company->name }}</td>
+                            <td>
+                                @if($company->parent)
+                                    <span class="badge bg-secondary">{{ $company->parent->name }}</span>
+                                @else
+                                    <span class="badge bg-dark">مستقل / مادر اصلی</span>
+                                @endif
+                            </td>
                             <td>
                                 @if($company->is_active)
                                     <span class="badge bg-success">فعال</span>
