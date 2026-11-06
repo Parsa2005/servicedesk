@@ -8,10 +8,11 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('roles', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('company_id')->nullable()->constrained('companies')->onDelete('cascade');
+            $table->uuid('id')->primary();
+            $table->foreignId('company_id')->nullable()->constrained()->cascadeOnDelete();
             $table->string('name'); 
-            $table->string('slug')->unique(); 
+            $table->string('slug');
+            $table->unique(['company_id', 'slug']);
             $table->timestamps();
         });
     }

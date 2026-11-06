@@ -9,12 +9,37 @@
         </div>
 
         <div class="card-body">
-            {{-- 👈 اصلاح پاس دادن شیء $role به جای $role->id برای ساخت دقیق URL --}}
-            <form action="{{ route('panel.roles.update', $role) }}" method="POST">
+            @if ($errors->any())
+                <div class="alert alert-danger" style="background: #ffe6e6; color: #d9534f; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            <form action="{{ route('panel.roles.update', $role->id) }}" method="POST">
                 @csrf
                 @method('PUT')
 
                 <div class="row g-3 mb-4">
+                    {{-- انتخاب شرکت (فقط برای creator) --}}
+                    @if(auth()->user()->level === 'creator' && isset($companies) && $companies->count() > 0)
+                        <div class="col-md-12">
+                            <label for="company_id" class="form-label fw-bold">انتخاب شرکت</label>
+                            <select name="company_id" id="company_id" class="form-select @error('company_id') is-invalid @enderror">
+                                <option value="">-- بدون شرکت (عمومی / سیستمی) --</option>
+                                @foreach($companies as $company)
+                                    <option value="{{ $company->id }}" {{ old('company_id', $role->company_id) == $company->id ? 'selected' : '' }}>
+                                        {{ $company->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('company_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
+                    @endif
+
                     <div class="col-md-6">
                         <label for="name" class="form-label fw-bold">عنوان نقش (فارسی) <span class="text-danger">*</span></label>
                         <input type="text" name="name" id="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name', $role->name) }}">
@@ -92,7 +117,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // انتخاب/لغو کل یک گروه
     document.querySelectorAll('.group-checkbox').forEach(function (groupCheck) {
         groupCheck.addEventListener('change', function () {
             const groupIndex = this.getAttribute('data-group');
@@ -101,14 +125,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // انتخاب خودکار زیرمجموعه‌ها بر اساس پیشوند Slug
     document.addEventListener('change', function (e) {
         if (e.target.classList.contains('permission-checkbox')) {
             const slug = e.target.getAttribute('data-slug');
             if (!slug) return;
-            
             const isChecked = e.target.checked;
-
             document.querySelectorAll('.permission-checkbox').forEach(cb => {
                 const cbSlug = cb.getAttribute('data-slug');
                 if (cbSlug && cbSlug.startsWith(slug + '.')) {
@@ -118,7 +139,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // انتخاب/لغو کل همه گروه‌ها
     let allSelected = false;
     const toggleAllBtn = document.getElementById('toggle-all');
     if (toggleAllBtn) {

@@ -9,10 +9,36 @@
         </div>
 
         <div class="card-body">
+            @if ($errors->any())
+                <div class="alert alert-danger" style="background: #ffe6e6; color: #d9534f; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <form action="{{ route('panel.roles.store') }}" method="POST">
                 @csrf
 
                 <div class="row g-3 mb-4">
+                    {{-- انتخاب شرکت (فقط برای ادمین کل / creator نمایش داده می‌شود) --}}
+                    @if(auth()->user()->level === 'creator' && isset($companies) && $companies->count() > 0)
+                        <div class="col-md-12">
+                            <label for="company_id" class="form-label fw-bold">انتخاب شرکت <span class="text-muted">(اختیاری - خالی = نقش عمومی سیستمی)</span></label>
+                            <select name="company_id" id="company_id" class="form-select @error('company_id') is-invalid @enderror">
+                                <option value="">-- بدون شرکت (عمومی / سیستمی) --</option>
+                                @foreach($companies as $company)
+                                    <option value="{{ $company->id }}" {{ old('company_id') == $company->id ? 'selected' : '' }}>
+                                        {{ $company->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('company_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
+                    @endif
+
                     <div class="col-md-6">
                         <label for="name" class="form-label fw-bold">عنوان نقش (فارسی) <span class="text-danger">*</span></label>
                         <input type="text" name="name" id="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name') }}" placeholder="مثال: مدیر پشتیبانی">
@@ -71,7 +97,7 @@
                         </div>
                     @empty
                         <div class="col-12">
-                            <div class="alert alert-warning mb-0">هیچ دسترسی در دیتابیس ثبت نشده است. لطفاً سیدر پرمیشن‌ها را اجرا کنید.</div>
+                            <div class="alert alert-warning mb-0">هیچ دسترسی در دیتابیس ثبت نشده است.</div>
                         </div>
                     @endforelse
                 </div>
@@ -86,7 +112,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // انتخاب/لغو کل یک گروه
     document.querySelectorAll('.group-checkbox').forEach(function (groupCheck) {
         groupCheck.addEventListener('change', function () {
             const groupIndex = this.getAttribute('data-group');
@@ -95,14 +120,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // انتخاب خودکار زیرمجموعه‌ها بر اساس پیشوند Slug (مثلاً با تیکت users.edit تمام زیرشاخه‌ها تیک می‌خورند)
     document.addEventListener('change', function (e) {
         if (e.target.classList.contains('permission-checkbox')) {
             const slug = e.target.getAttribute('data-slug');
             if (!slug) return;
-            
             const isChecked = e.target.checked;
-
             document.querySelectorAll('.permission-checkbox').forEach(cb => {
                 const cbSlug = cb.getAttribute('data-slug');
                 if (cbSlug && cbSlug.startsWith(slug + '.')) {
@@ -112,7 +134,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // انتخاب/لغو کل همه گروه‌ها
     let allSelected = false;
     const toggleAllBtn = document.getElementById('toggle-all');
     if (toggleAllBtn) {
