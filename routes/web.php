@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -26,6 +27,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', function () {
         return view('dashboard');
     })->name('dashboard');
+
+
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('user.notifications.index');
+    
+    Route::get('/notifications/read-all', [NotificationController::class, 'readAll'])->name('user.notifications.readAll');
 });
 
 // بارگذاری فایل‌های روت مجزا

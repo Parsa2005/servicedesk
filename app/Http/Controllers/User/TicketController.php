@@ -8,6 +8,7 @@ use App\Models\TicketCategory;
 use App\Models\Department;
 use App\Models\Company;
 use App\Models\User;
+use App\Notifications\TicketNotification;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
@@ -133,6 +134,13 @@ class TicketController extends Controller
             }
         }
 
+        if ($ticket->assigned_to && $ticket->assigned_to !== $user->id) {
+            $assignedUser = User::find($ticket->assigned_to);
+            if ($assignedUser) {
+                $assignedUser->notify(new TicketNotification($ticket, 'یک تیکت جدید با موضوع "' . $ticket->subject . '" به شما ارجاع داده شد.'));
+            }
+        }
+
         return redirect()->route('user.tickets.index')->with('success', 'تیکت پشتیبانی با موفقیت ثبت و ارسال شد.');
     }
 
@@ -140,6 +148,10 @@ class TicketController extends Controller
     {
         $this->authorize('view', $ticket);
         
+        auth()->user()->unreadNotifications()
+            ->where('data->ticket_id', $ticket->id)
+            ->update(['read_at' => now()]);
+
         $ticket->load([
             'company', 
             'targetCompany', 
@@ -173,7 +185,6 @@ class TicketController extends Controller
 
     public function edit(Ticket $ticket)
     {
-        
         $this->authorize('update', $ticket);
 
         $user = auth()->user();
@@ -265,10 +276,12 @@ class TicketController extends Controller
         $newAssigneeId = $request->input('assigned_to');
         $message = $request->body;
 
-        
+        // ثبت لاگ ارجاع سیستم در متن کامنت
         if ($newAssigneeId && $newAssigneeId != $ticket->assigned_to) {
             $newAssignee = User::find($newAssigneeId);
-            $message .= "\n\n[🔄 ارجاع سیستم: این تیکت توسط " . auth()->user()->name . " به " . $newAssignee->name . " (" . optional($newAssignee->department)->name . " - " . optional($newAssignee->company)->name . ") ارجاع داده شد.]";
+            if ($newAssignee) {
+                $message .= "\n\n[🔄 ارجاع سیستم: این تیکت توسط " . auth()->user()->name . " به " . $newAssignee->name . " (" . optional($newAssignee->department)->name . " - " . optional($newAssignee->company)->name . ") ارجاع داده شد.]";
+            }
         }
 
         $comment = $ticket->comments()->create([
@@ -297,6 +310,17 @@ class TicketController extends Controller
 
         if ($ticket->status === 'open' && $ticket->user_id !== auth()->id()) {
             $ticket->update(['status' => 'in_progress']);
+        }
+
+        if ($ticket->user_id !== auth()->id()) {
+            $ticket->user->notify(new TicketNotification($ticket, 'کاربر ' . auth()->user()->name . ' به تیکت شما پاسخ داد.'));
+        }
+
+        if ($newAssigneeId && $newAssigneeId != $ticket->getOriginal('assigned_to') && $newAssigneeId != auth()->id()) {
+            $newAssigneeUser = User::find($newAssigneeId);
+            if ($newAssigneeUser) {
+                $newAssigneeUser->notify(new TicketNotification($ticket, 'تیکت "' . $ticket->subject . '" به شما ارجاع داده شد.'));
+            }
         }
 
         return back()->with('success', 'پاسخ شما با موفقیت ثبت و ارجاع شد.');
