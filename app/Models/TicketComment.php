@@ -28,6 +28,6 @@ class TicketComment extends Model
 
     public function attachments(): HasMany
     {
-        return $this->hasMany(Attachment::class);
+        return $this->hasMany(attachment::class, 'ticket_comment_id');
     }
 }

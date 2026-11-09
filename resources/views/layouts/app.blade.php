@@ -16,10 +16,10 @@
             <a class="navbar-brand" href="/">سامانه ServiceDesk</a>
             <div class="collapse navbar-collapse">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link {{ request()->routeIs('user.tickets.*') ? 'active' : '' }}" href="{{ route('user.tickets.index') }}">تیکت‌های پشتیبانی</a>
-                    </li>
                     @auth
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ route('panel.menu') }}">پنل مدیریت</a>
+                        </li>
                         <li class="nav-item">
                             <span class="nav-link text-light">خوش آمدید، {{ auth()->user()->name }} ({{ auth()->user()->level }})</span>
                         </li>
@@ -29,10 +29,6 @@
                                 <button type="submit" class="btn btn-link nav-link text-danger">خروج</button>
                             </form>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ route('panel.menu') }}">پنل مدیریت</a>
-                        </li>
-
                     @else
                         <li class="nav-item">
                             <a class="nav-link" href="{{ route('login') }}">ورود</a>
@@ -43,6 +39,9 @@
                         </li>
 
                     @endauth
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('user.tickets.*') ? 'active' : '' }}" href="{{ route('user.tickets.index') }}">تیکت‌های پشتیبانی</a>
+                    </li>
                 </ul>
                 
             </div>

@@ -7,56 +7,63 @@ use App\Models\User;
 
 class TicketPolicy
 {
-    /**
-     * بررسی دسترسی سراسری برای کریتور (مالک سیستم)
-     */
-    public function before(User $user, string $ability): ?bool
-    {
-        if ($user->level === 'creator') {
-            return true;
-        }
-        
-        return null;
-    }
-
-    /**
-     * مشاهده لیست تیکت‌ها
-     */
+    // مشاهده لیست تیکت‌ها
     public function viewAny(User $user): bool
     {
-        // همه کاربران غیر از سطح user عادی اجازه ورود به پنل و دیدن لیست را دارند (بر اساس پرمیشن‌ها)
-        return $user->level !== 'user';
+        return true; 
     }
 
-    /**
-     * مشاهده یک تیکت خاص
-     */
+    // مشاهده جزئیات یک تیکت خاص
     public function view(User $user, Ticket $ticket): bool
     {
-        // اگر کاربر کارمند (Employee) است، فقط تیکت‌های خودش را می‌بیند
-        if ($user->level === 'employee') {
-            return $ticket->user_id === $user->id;
+        if ($ticket->user_id === $user->id) {
+            return true;
         }
 
-        // اگر کاربر ادمین یا کارشناس شرکت است، تیکت باید متعلق به شرکت خودش باشد
-        return $ticket->company_id === $user->company_id;
+        if ($ticket->assigned_to === $user->id) {
+            return true;
+        }
+
+        if (empty($user->company_id)) {
+            return false;
+        }
+
+        $isRelatedCompany = ($user->company_id === $ticket->company_id || $user->company_id === $ticket->target_company_id);
+
+        if (!$isRelatedCompany) {
+            return false;
+        }
+
+        return true;
     }
 
-    /**
-     * ایجاد تیکت جدید
-     */
+    // ایجاد تیکت جدید
     public function create(User $user): bool
     {
-        // تمام کاربران سازمان که شرکت دارند می‌توانند تیکت ثبت کنند
-        return $user->company_id !== null;
+        return true;
     }
 
-    /**
-     * ویرایش یا پاسخ به تیکت
-     */
+    // 👈 بررسی دسترسی ویرایش تیکت
     public function update(User $user, Ticket $ticket): bool
     {
-        // تیکت باید حتماً متعلق به شرکت کاربر باشد
-        return $ticket->company_id === $user->company_id;
+        // کاربر باید یا ایجادکننده تیکت باشد یا شخص مسئول فعلی
+        if ($ticket->user_id !== $user->id && $ticket->assigned_to !== $user->id) {
+            return false;
+        }
+
+        // بررسی اینکه آیا طرف مقابل پاسخی داده است یا خیر
+        return $ticket->canBeEditedBy($user);
+    }
+
+    // پاسخ دادن به تیکت
+    public function reply(User $user, Ticket $ticket): bool
+    {
+        return $this->view($user, $ticket);
+    }
+
+    // بستن تیکت
+    public function close(User $user, Ticket $ticket): bool
+    {
+        return $ticket->user_id === $user->id || $ticket->target_company_id === $user->company_id;
     }
 }

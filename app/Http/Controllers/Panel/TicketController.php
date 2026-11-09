@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Panel;
 
 use App\Http\Controllers\Controller;
+use App\Models\Department;
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -20,7 +22,7 @@ class TicketController extends Controller
             return view('panel.tickets.index', compact('tickets'));
         }
 
-        $query = Ticket::with(['user', 'category', 'department', 'company', 'assignee']);
+        $query = Ticket::with(['user', 'category', 'department', 'company', 'assigned']);
 
         if ($user->level !== 'creator') {
             $query->where('company_id', $user->company_id);
@@ -63,7 +65,7 @@ class TicketController extends Controller
         // بارگذاری کارمندان همان شرکت برای باکس انتخاب پشتیبان مسئول
         $companyStaff = User::where('company_id', $ticket->company_id)->get();
 
-        $ticket->load(['comments.user.roles', 'comments.user.company', 'user.company', 'user.department', 'category', 'assignee']);
+        $ticket->load(['comments.user.roles', 'comments.user.company', 'user.company', 'user.department', 'category', 'assigned']);
 
         return view('panel.tickets.show', compact('ticket', 'companyStaff'));
     }
@@ -189,5 +191,107 @@ class TicketController extends Controller
         }
 
         return back()->with('success', 'پشتیبان مسئول با موفقیت تعیین شد.');
+    }
+
+    /**
+     * 💬 ثبت کامنت / پاسخ جدید
+     */
+    public function storeComment(Request $request, Ticket $ticket)
+    {
+        $this->authorize('reply', $ticket);
+
+        $request->validate([
+            'body'       => ['required', 'string'],
+            'attachment' => ['nullable', 'file', 'max:20480'],
+        ]);
+
+        $comment = $ticket->comments()->create([
+            'user_id' => auth()->id(),
+            'body'    => $request->body,
+        ]);
+
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $path = $file->store('ticket-comment-attachments', 'public');
+
+            $comment->attachments()->create([
+                'file_path' => $path,
+                'file_name' => $file->getClientOriginalName(),
+            ]);
+        }
+
+        // تغییر وضعیت تیکت به در حال بررسی هنگام ثبت پاسخ
+        if ($ticket->status === 'open' && $ticket->user_id !== auth()->id()) {
+            $ticket->update(['status' => 'in_progress']);
+        }
+
+        return back()->with('success', 'پاسخ شما با موفقیت ثبت شد.');
+    }
+
+    /**
+     * ✏️ نمایش فرم ویرایش تیکت
+     */
+    public function edit(Ticket $ticket)
+    {
+        $this->authorize('view', $ticket);
+
+        if (!$ticket->canBeEditedBy(auth()->user())) {
+            return redirect()->route('user.tickets.show', $ticket)
+                ->with('error', 'به دلیل ثبت پاسخ از سوی طرف مقابل، امکان ویرایش این تیکت وجود ندارد.');
+        }
+
+        $user = auth()->user();
+        $senderCompany = $user->company;
+
+        $allowedCompanies = $senderCompany ? $senderCompany->getGroupCompanies() : collect();
+        $allowedCompanyIds = $allowedCompanies->pluck('id');
+
+        $targetDepartments = Department::whereIn('company_id', $allowedCompanyIds)->get();
+        $categories = TicketCategory::where('company_id', $user->company_id)->get();
+
+        return view('user.tickets.edit', compact('ticket', 'categories', 'allowedCompanies', 'targetDepartments'));
+    }
+
+    
+    public function update(Request $request, Ticket $ticket)
+    {
+        $this->authorize('view', $ticket);
+
+        if (!$ticket->canBeEditedBy(auth()->user())) {
+            return redirect()->route('user.tickets.show', $ticket)
+                ->with('error', 'امکان ویرایش این تیکت وجود ندارد.');
+        }
+
+        $request->validate([
+            'subject'           => ['required', 'string', 'max:255'],
+            'target_company_id' => ['required', 'exists:companies,id'],
+            'department_id'     => ['required', 'exists:departments,id'],
+            'category_id'       => ['required', 'exists:ticket_categories,id'],
+            'priority'          => ['required', 'in:low,normal,high,critical'],
+            'message'           => ['required', 'string'],
+            'attachment'        => ['nullable', 'file', 'max:20480'],
+        ]);
+
+        $ticket->update([
+            'target_company_id' => $request->target_company_id,
+            'department_id'     => $request->department_id,
+            'category_id'       => $request->category_id,
+            'priority'          => $request->priority,
+            'subject'           => $request->subject,
+            'description'       => $request->message,
+        ]);
+
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $path = $file->store('ticket-attachments', 'public');
+
+            $ticket->attachments()->create([
+                'file_path' => $path,
+                'file_name' => $file->getClientOriginalName(),
+            ]);
+        }
+
+        return redirect()->route('user.tickets.show', $ticket)
+            ->with('success', 'تیکت با موفقیت ویرایش شد.');
     }
 }

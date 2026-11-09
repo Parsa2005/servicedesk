@@ -34,7 +34,12 @@ class Ticket extends Model // یا همان Ticket شما
 
     public function company(): BelongsTo
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Company::class , 'company_id');
+    }
+
+    public function targetCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class , 'target_company_id');
     }
 
     public function department(): BelongsTo
@@ -47,7 +52,7 @@ class Ticket extends Model // یا همان Ticket شما
         return $this->belongsTo(User::class);
     }
 
-    public function assignee(): BelongsTo
+    public function assigned(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
     }
@@ -93,5 +98,41 @@ class Ticket extends Model // یا همان Ticket شما
             'closed'      => 'bg-dark',
             default       => 'bg-secondary',
         };
+    }
+
+    public function getPriorityLabelAttribute(): string
+    {
+        return match ($this->priority) {
+            'low'      => 'کم',
+            'normal'   => 'عادی',
+            'high'     => 'بالا',
+            'critical' => 'بحرانی / فوری',
+            default    => 'عادی',
+        };
+    }
+
+    public function getPriorityBadgeClassAttribute(): string
+    {
+        return match ($this->priority) {
+            'low'      => 'bg-secondary',
+            'normal'   => 'bg-primary',
+            'high'     => 'bg-warning text-dark',
+            'critical' => 'bg-danger',
+            default    => 'bg-secondary',
+        };
+    }
+
+    
+    public function canBeEditedBy(User $user): bool
+    {
+        if ($this->user_id !== $user->id) {
+            return false;
+        }
+
+        $hasResponseFromOthers = $this->comments()
+            ->where('user_id', '!=', $user->id)
+            ->exists();
+
+        return !$hasResponseFromOthers;
     }
 }

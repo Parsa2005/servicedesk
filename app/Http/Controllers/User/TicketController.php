@@ -6,18 +6,31 @@ use App\Http\Controllers\Controller;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\Department;
+use App\Models\Company;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class TicketController extends Controller
 {
+    use AuthorizesRequests;
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Ticket::class);
+
         $user = auth()->user();
 
-        $query = Ticket::with(['category', 'department', 'company', 'assignee'])
-            ->where('user_id', $user->id)
-            ->where('company_id', $user->company_id);
+        $query = Ticket::with(['category', 'department', 'company', 'targetCompany', 'assigned', 'user'])
+            ->where(function ($q) use ($user) {
+                if ($user->company_id) {
+                    $q->where('company_id', $user->company_id)
+                      ->orWhere('target_company_id', $user->company_id)
+                      ->orWhere('assigned_to', $user->id);
+                } else {
+                    $q->where('user_id', $user->id);
+                }
+            });
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -34,55 +47,57 @@ class TicketController extends Controller
 
     public function create()
     {
+        $this->authorize('create', Ticket::class);
+
         $user = auth()->user();
+        $senderCompany = $user->company;
 
-        // 👈 دریافت دسته‌بندی‌های مختص شرکت کاربر (قابل مشاهده توسط تمام دپارتمان‌های همان شرکت)
-        $categories = TicketCategory::where('company_id', $user->company_id)->get();
-            
-        $departments = Department::where('company_id', $user->company_id)->get();
-        
-        $companyStaff = User::where('company_id', $user->company_id)->get();
+        $allowedCompanies = $senderCompany ? $senderCompany->getGroupCompanies() : Company::all();
+        $allowedCompanyIds = $allowedCompanies->pluck('id');
 
-        return view('user.tickets.create', compact('categories', 'departments', 'companyStaff'));
+        $targetDepartments = Department::whereIn('company_id', $allowedCompanyIds)->get();
+        $departmentUsers = User::whereNotNull('department_id')->get();
+        $categories = TicketCategory::all();
+
+        return view('user.tickets.create', compact('categories', 'allowedCompanies', 'targetDepartments', 'departmentUsers'));
     }
 
     public function store(Request $request)
     {
+        $this->authorize('create', Ticket::class);
+
         $user = auth()->user();
+        $senderCompany = $user->company;
 
         $request->validate([
-            'subject'       => ['required', 'string', 'max:255'],
-            'category_id'   => [
-                'required', 
-                'exists:ticket_categories,id',
-                // 🛡️ اطمینان از اینکه دسته‌بندی انتخاب‌شده متعلق به شرکت کاربر باشد
-                function ($attribute, $value, $fail) use ($user) {
-                    $category = TicketCategory::find($value);
-                    if (!$category || $category->company_id !== $user->company_id) {
-                        $fail('دسته‌بندی انتخاب‌شده معتبر نیست.');
+            'subject'           => ['required', 'string', 'max:255'],
+            'target_company_id' => [
+                'required',
+                'exists:companies,id',
+                function ($attribute, $value, $fail) use ($senderCompany) {
+                    if ($senderCompany) {
+                        $targetCompany = Company::find($value);
+                        if (!$senderCompany->canInteractWith($targetCompany)) {
+                            $fail('شما مجاز به ارسال تیکت به این شرکت نیستید (متعلق به هرم سازمانی شما نیست).');
+                        }
                     }
                 }
             ],
-            'department_id' => ['nullable', 'exists:departments,id'],
-            'priority'      => ['required', 'in:low,normal,high,critical'],
-            'message'       => ['required', 'string'],
-            'assigned_to'   => [
-                'nullable', 
-                'exists:users,id', 
-                function ($attribute, $value, $fail) use ($request, $user) {
-                    if ($value) {
-                        $staff = User::find($value);
-                        
-                        if (!$staff || $staff->company_id !== $user->company_id) {
-                            $fail('کارشناس انتخاب‌شده متعلق به شرکت شما نیست.');
-                        }
-                        
-                        if ($request->filled('department_id') && $staff->department_id != $request->department_id) {
-                            $fail('کارشناس انتخاب‌شده عضو دپارتمان انتخاب‌شده نیست.');
-                        }
+            'department_id'     => [
+                'required',
+                'exists:departments,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    $department = Department::find($value);
+                    if ($department && $department->company_id != $request->target_company_id) {
+                        $fail('دپارتمان انتخاب شده متعلق به شرکت مقصد نمی‌باشد.');
                     }
-                },
+                }
             ],
+            'assigned_to'       => ['nullable', 'exists:users,id'],
+            'category_id'       => ['required', 'exists:ticket_categories,id'],
+            'priority'          => ['required', 'in:low,normal,high,critical'],
+            'message'           => ['required', 'string'],
+            'attachments.*'     => ['nullable', 'file', 'max:20480'],
         ]);
 
         $hoursToAdd = match ($request->priority) {
@@ -93,99 +108,197 @@ class TicketController extends Controller
             default    => 24,
         };
 
-        Ticket::create([
-            'company_id'    => $user->company_id,
-            'user_id'       => $user->id,
-            'department_id' => $request->department_id,
-            'category_id'   => $request->category_id,
-            'assigned_to'   => $request->assigned_to,
-            'priority'      => $request->priority,
-            'subject'       => $request->subject,
-            'description'   => $request->message,
-            'status'        => 'open',
-            'sla_due_at'    => now()->addHours($hoursToAdd),
+        $ticket = Ticket::create([
+            'company_id'        => $user->company_id,      
+            'target_company_id' => $request->target_company_id, 
+            'user_id'           => $user->id,              
+            'department_id'     => $request->department_id, 
+            'assigned_to'       => $request->assigned_to, 
+            'category_id'       => $request->category_id,
+            'priority'          => $request->priority,
+            'subject'           => $request->subject,
+            'description'       => $request->message,
+            'status'            => 'open',
+            'sla_due_at'        => now()->addHours($hoursToAdd),
         ]);
 
-        return redirect()->route('user.tickets.index')
-            ->with('success', 'تیکت شما با موفقیت ثبت شد.');
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store('ticket-attachments', 'public');
+
+                $ticket->attachments()->create([
+                    'file_path' => $path,
+                    'file_name' => $file->getClientOriginalName(),
+                ]);
+            }
+        }
+
+        return redirect()->route('user.tickets.index')->with('success', 'تیکت پشتیبانی با موفقیت ثبت و ارسال شد.');
     }
 
     public function show(Ticket $ticket)
     {
-        $user = auth()->user();
-
-        if ($ticket->user_id !== $user->id || $ticket->company_id !== $user->company_id) {
-            abort(403, 'شما مجاز به مشاهده این تیکت نیستید.');
-        }
-
+        $this->authorize('view', $ticket);
+        
         $ticket->load([
-            'comments' => function($q) {
-                $q->where('is_internal', false);
-            }, 
-            'comments.user', 
-            'comments.attachments',
+            'company', 
+            'targetCompany', 
+            'department', 
             'category', 
-            'department',
-            'assignee',
-            'attachments' => function($q) {
-                $q->whereNull('ticket_comment_id');
-            }
+            'user', 
+            'assigned', 
+            'attachments',
+            'comments.user',
+            'comments.attachments'
         ]);
 
-        return view('user.tickets.show', compact('ticket'));
+        $rootCompany = $ticket->targetCompany 
+            ? $ticket->targetCompany->getRootCompany() 
+            : ($ticket->company ? $ticket->company->getRootCompany() : null);
+
+        $assignableUsers = collect();
+        if ($rootCompany) {
+            $groupCompanyIds = $rootCompany->getGroupCompanies()->pluck('id');
+            $assignableUsers = User::whereIn('company_id', $groupCompanyIds)
+                ->whereNotNull('department_id')
+                ->get();
+        } else {
+            $assignableUsers = User::where('company_id', $ticket->target_company_id)
+                ->whereNotNull('department_id')
+                ->get();
+        }
+
+        return view('user.tickets.show', compact('ticket', 'assignableUsers'));
     }
 
-    public function reply(Request $request, Ticket $ticket)
+    public function edit(Ticket $ticket)
     {
-        $user = auth()->user();
+        
+        $this->authorize('update', $ticket);
 
-        if ($ticket->user_id !== $user->id || $ticket->company_id !== $user->company_id) {
-            abort(403, 'شما مجاز به پاسخ‌گویی به این تیکت نیستید.');
-        }
+        $user = auth()->user();
+        $senderCompany = $user->company;
+
+        $allowedCompanies = $senderCompany ? $senderCompany->getGroupCompanies() : Company::all();
+        $allowedCompanyIds = $allowedCompanies->pluck('id');
+
+        $targetDepartments = Department::whereIn('company_id', $allowedCompanyIds)->get();
+        $departmentUsers = User::whereNotNull('department_id')->get();
+        $categories = TicketCategory::all();
+
+        return view('user.tickets.edit', compact('ticket', 'categories', 'allowedCompanies', 'targetDepartments', 'departmentUsers'));
+    }
+
+    public function update(Request $request, Ticket $ticket)
+    {
+        $this->authorize('update', $ticket);
+
+        $senderCompany = auth()->user()->company;
 
         $request->validate([
-            'message'    => ['required', 'string'],
-            'attachment' => ['nullable', 'file', 'max:2048'],
+            'subject'           => ['required', 'string', 'max:255'],
+            'target_company_id' => [
+                'required',
+                'exists:companies,id',
+                function ($attribute, $value, $fail) use ($senderCompany) {
+                    if ($senderCompany) {
+                        $targetCompany = Company::find($value);
+                        if (!$senderCompany->canInteractWith($targetCompany)) {
+                            $fail('شما مجاز به ارسال تیکت به این شرکت نیستید.');
+                        }
+                    }
+                }
+            ],
+            'department_id'     => [
+                'required',
+                'exists:departments,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    $department = Department::find($value);
+                    if ($department && $department->company_id != $request->target_company_id) {
+                        $fail('دپارتمان انتخاب شده متعلق به شرکت مقصد نمی‌باشد.');
+                    }
+                }
+            ],
+            'assigned_to'       => ['nullable', 'exists:users,id'],
+            'category_id'       => ['required', 'exists:ticket_categories,id'],
+            'priority'          => ['required', 'in:low,normal,high,critical'],
+            'message'           => ['required', 'string'],
+            'attachments.*'     => ['nullable', 'file', 'max:20480'],
         ]);
+
+        $ticket->update([
+            'target_company_id' => $request->target_company_id,
+            'department_id'     => $request->department_id,
+            'assigned_to'       => $request->assigned_to,
+            'category_id'       => $request->category_id,
+            'priority'          => $request->priority,
+            'subject'           => $request->subject,
+            'description'       => $request->message,
+        ]);
+
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store('ticket-attachments', 'public');
+
+                $ticket->attachments()->create([
+                    'file_path' => $path,
+                    'file_name' => $file->getClientOriginalName(),
+                ]);
+            }
+        }
+
+        return redirect()->route('user.tickets.show', $ticket)
+            ->with('success', 'تیکت با موفقیت ویرایش شد.');
+    }
+
+    public function storeComment(Request $request, Ticket $ticket)
+    {
+        $this->authorize('view', $ticket);
+
+        $request->validate([
+            'body'           => ['required', 'string'],
+            'assigned_to'    => ['nullable', 'exists:users,id'],
+            'attachments'    => ['nullable', 'array'],
+            'attachments.*'  => ['file', 'max:20480'],
+        ]);
+
+        $newAssigneeId = $request->input('assigned_to');
+        $message = $request->body;
+
+        
+        if ($newAssigneeId && $newAssigneeId != $ticket->assigned_to) {
+            $newAssignee = User::find($newAssigneeId);
+            $message .= "\n\n[🔄 ارجاع سیستم: این تیکت توسط " . auth()->user()->name . " به " . $newAssignee->name . " (" . optional($newAssignee->department)->name . " - " . optional($newAssignee->company)->name . ") ارجاع داده شد.]";
+        }
 
         $comment = $ticket->comments()->create([
-            'user_id'     => $user->id,
-            'message'     => $request->message,
-            'is_internal' => false,
+            'user_id' => auth()->id(),
+            'message' => $message,
         ]);
 
-        if ($request->hasFile('attachment')) {
-            $file = $request->file('attachment');
-            $path = $file->store('ticket-attachments', 'public');
-
-            $ticket->attachments()->create([
-                'ticket_comment_id' => $comment->id,
-                'file_path'         => $path,
-                'file_name'         => $file->getClientOriginalName(),
+        if ($request->filled('assigned_to')) {
+            $ticket->update([
+                'assigned_to' => $request->assigned_to
             ]);
         }
 
-        if ($ticket->status === 'resolved' || $ticket->status === 'closed') {
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store('ticket-comment-attachments', 'public');
+
+                $comment->attachments()->create([
+                    'ticket_id'         => $ticket->id,
+                    'ticket_comment_id' => $comment->id,
+                    'file_path'         => $path,
+                    'file_name'         => $file->getClientOriginalName(),
+                ]);
+            }
+        }
+
+        if ($ticket->status === 'open' && $ticket->user_id !== auth()->id()) {
             $ticket->update(['status' => 'in_progress']);
         }
 
-        return back()->with('success', 'پاسخ شما با موفقیت ارسال شد.');
-    }
-
-    public function close(Ticket $ticket)
-    {
-        $user = auth()->user();
-
-        if ($ticket->user_id !== $user->id || $ticket->company_id !== $user->company_id) {
-            abort(403, 'شما مجاز به بستن این تیکت نیستید.');
-        }
-
-        if ($ticket->status === 'closed') {
-            return back()->with('error', 'این تیکت از قبل بسته شده است.');
-        }
-
-        $ticket->update(['status' => 'closed']);
-
-        return back()->with('success', 'تیکت با موفقیت بسته شد.');
+        return back()->with('success', 'پاسخ شما با موفقیت ثبت و ارجاع شد.');
     }
 }

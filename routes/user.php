@@ -11,17 +11,17 @@ Route::middleware(['auth'])
     ->name('user.')
     ->group(function () {
         
-        // لیست و ثبت تیکت جدید
         Route::get('/tickets', [UserTicketController::class, 'index'])->name('tickets.index');
         Route::get('/tickets/create', [UserTicketController::class, 'create'])->name('tickets.create');
         Route::post('/tickets', [UserTicketController::class, 'store'])->name('tickets.store');
         
-        // مشاهده جزئیات تیکت
         Route::get('/tickets/{ticket}', [UserTicketController::class, 'show'])->name('tickets.show');
+       
+        Route::get('/tickets/{ticket}/edit', [UserTicketController::class, 'edit'])->name('tickets.edit');
+        Route::put('/tickets/{ticket}', [UserTicketController::class, 'update'])->name('tickets.update');
         
-        // ارسال پاسخ به تیکت توسط کاربر
-        Route::post('/tickets/{ticket}/reply', [UserTicketController::class, 'reply'])->name('tickets.reply');
         
-        // بستن و به اتمام رساندن تیکت توسط خودِ کاربر
+        Route::post('/tickets/{ticket}/comments', [UserTicketController::class, 'storeComment'])->name('tickets.comments.store');
+        
         Route::put('/tickets/{ticket}/close', [UserTicketController::class, 'close'])->name('tickets.close');
     });
