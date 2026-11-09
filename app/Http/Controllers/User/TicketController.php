@@ -325,4 +325,22 @@ class TicketController extends Controller
 
         return back()->with('success', 'پاسخ شما با موفقیت ثبت و ارجاع شد.');
     }
+
+    public function close(Ticket $ticket)
+    {
+        $this->authorize('close', $ticket);
+
+        if ($ticket->status === 'closed') {
+            return back()->with('error', 'این تیکت از قبل بسته شده است.');
+        }
+
+        $ticket->update(['status' => 'closed']);
+
+        // ارسال نوتیفیکیشن به طرف مقابل مبنی بر بسته شدن تیکت
+        if ($ticket->user_id !== auth()->id()) {
+            $ticket->user->notify(new TicketNotification($ticket, 'تیکت شماره #' . $ticket->id . ' بسته شد.'));
+        }
+
+        return back()->with('success', 'تیکت با موفقیت بسته شد.');
+    }
 }

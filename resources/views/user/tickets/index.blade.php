@@ -78,12 +78,14 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge {{ $ticket->status_badge_attribute }} rounded-pill px-3 py-2 shadow-xs">
+                                            <!-- 👈 اصلاح شد (حذف _attribute) -->
+                                            <span class="badge {{ $ticket->status_badge }} rounded-pill px-3 py-2 shadow-xs">
                                                 {{ $ticket->status_label }}
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge {{ $ticket->priority_badge_class_attribute }} rounded-pill px-3 py-1">
+                                            <!-- 👈 اصلاح شد (حذف _attribute) -->
+                                            <span class="badge {{ $ticket->priority_badge_class }} rounded-pill px-3 py-1">
                                                 {{ $ticket->priority_label }}
                                             </span>
                                         </td>

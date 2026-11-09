@@ -18,6 +18,29 @@
                     @endif
                     <a href="{{ route('user.tickets.index') }}" class="btn btn-light border text-secondary fw-bold btn-sm px-3 rounded-pill shadow-sm">بازگشت به لیست</a>
                 </div>
+                <div>
+                    @php
+                        $user = auth()->user();
+                        $isAuthor = ($ticket->user_id === $user->id);
+                        $canCloseBtn = false;
+                        
+                        if ($ticket->company_id !== null) {
+                            $canCloseBtn = $isAuthor || $user->level === 'creator';
+                        } else {
+                            $canCloseBtn = $isAuthor || $ticket->assigned_to === $user->id || $ticket->department_id === $user->department_id || $user->level === 'creator';
+                        }
+                    @endphp
+
+                    @if($canCloseBtn && $ticket->status != 'closed')
+                        <form action="{{ route('user.tickets.close', $ticket) }}" method="POST" class="d-inline">
+                            @csrf
+                            @method('PUT') <!-- 👈 این خط را اضافه کنید -->
+                            <button type="submit" class="btn btn-danger btn-sm px-3 rounded-pill shadow-sm fw-bold" onclick="return confirm('آیا از بستن این تیکت اطمینان دارید؟')">
+                                🔒 بستن تیکت
+                            </button>
+                        </form>
+                    @endif
+                </div>
             </div>
 
             @if(session('success'))
