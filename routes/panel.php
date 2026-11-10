@@ -21,6 +21,7 @@ Route::middleware(['auth', 'level:creator,admin'])
        
         Route::get('/menu', [DashboardController::class, 'index'])->name('menu');
 
+        Route::get('/reports', [DashboardController::class, 'reports'])->name('reports.index');
       
         Route::resource('roles', RoleController::class)->except(['show']);
 

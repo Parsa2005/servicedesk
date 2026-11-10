@@ -3,7 +3,7 @@
 @section('title', 'داشبورد اصلی')
 
 @section('content')
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
     <!-- کارت تعداد کل کاربران -->
     <div class="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-6 shadow-sm border border-blue-500/20">
         <div class="flex justify-between items-start">
@@ -15,27 +15,20 @@
         </div>
     </div>
 
-    <!-- کارت تعداد مدیران -->
-    <div class="bg-gradient-to-br from-emerald-600 to-emerald-700 text-white rounded-2xl p-6 shadow-sm border border-emerald-500/20">
+    <!-- 📊 کارت/دکمه کلیکی گزارش‌ها و آمار -->
+   <a href="{{ route('panel.reports.index') }}" style="background: linear-gradient(to bottom right, #9333ea, #4338ca); color: #ffffff;" class="rounded-2xl p-6 shadow-sm border border-purple-500/20 hover:shadow-md hover:scale-[1.01] transition-all group flex flex-col justify-between">
         <div class="flex justify-between items-start">
             <div>
-                <p class="text-emerald-100 text-sm font-medium mb-1">مدیران و ادمین‌ها</p>
-                <h2 class="text-3xl font-extrabold tracking-tight">{{ $stats['admins_count'] ?? 0 }}</h2>
+                <p class="text-purple-200 text-sm font-medium mb-1">گزارش‌ها و آمار</p>
+                <h2 class="text-lg font-bold tracking-tight text-white">مشاهده تفصیلی SLA و تاریخچه</h2>
             </div>
-            <span class="p-3 bg-white/10 rounded-xl text-xl backdrop-blur-sm">🛡️</span>
+            <span class="p-3 bg-white/10 rounded-xl text-xl backdrop-blur-sm group-hover:rotate-12 transition-transform">📊</span>
         </div>
-    </div>
-
-    <!-- کارت تعداد نقش‌ها -->
-    <div class="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-2xl p-6 shadow-sm border border-amber-400/20">
-        <div class="flex justify-between items-start">
-            <div>
-                <p class="text-amber-100 text-sm font-medium mb-1">نقش‌های تعریف‌شده</p>
-                <h2 class="text-3xl font-extrabold tracking-tight">{{ $stats['roles_count'] ?? 0 }}</h2>
-            </div>
-            <span class="p-3 bg-white/10 rounded-xl text-xl backdrop-blur-sm">🔑</span>
+        <div class="mt-4 flex items-center text-xs text-purple-200 font-semibold gap-1">
+            <span>ورود به بخش گزارش‌ها</span>
+            <span>←</span>
         </div>
-    </div>
+    </a>
 </div>
 
 <!-- کارت‌های دسترسی سریع به ماژول‌ها -->
@@ -73,11 +66,13 @@
         </div>
     </a>
 
+    <!-- مدیریت دسته‌بندی‌ها -->
     <a href="{{ route('panel.categories.index') }}" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 hover:border-purple-500/50 hover:shadow-md transition-all group">
         <div class="flex items-center gap-4">
-            <div class="p-3 bg-purple-50 text-purple-600 rounded-xl text-xl group-hover:bg-purple-600 group-hover:text-white transition-colors">🎫</div>
+            <div class="p-3 bg-purple-50 text-purple-600 rounded-xl text-xl group-hover:bg-purple-600 group-hover:text-white transition-colors">📑</div>
             <div>
-                <h4 class="font-bold text-slate-800">مدیریت دسته بندی ها</h4>
+                <h4 class="font-bold text-slate-800">مدیریت دسته‌بندی‌ها</h4>
+                <p class="text-slate-500 text-xs mt-1">دسته‌بندی موضوعی تیکت‌ها</p>
             </div>
         </div>
     </a>
@@ -93,12 +88,13 @@
         </div>
     </a>
 
+    <!-- مدیریت اعضا -->
     <a href="{{ route('panel.membership.index') }}" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 hover:border-indigo-500/50 hover:shadow-md transition-all group">
         <div class="flex items-center gap-4">
             <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl text-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">🏭</div>
             <div>
-                <h4 class="font-bold text-slate-800"> مدیریت اعضا</h4>
-                <p class="text-slate-500 text-xs mt-1"> عضویت شرکت و دپارتمان</p>
+                <h4 class="font-bold text-slate-800">مدیریت اعضا</h4>
+                <p class="text-slate-500 text-xs mt-1">عضویت شرکت و دپارتمان</p>
             </div>
         </div>
     </a>
@@ -112,7 +108,7 @@
     <ul class="space-y-3 text-sm text-slate-700">
         <li class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-blue-600"></span>
-            <strong><a href="{{ route('panel.roles.index') }}" class="text-blue-600 hover:underline">مدیریت نقش‌ها:</a></strong> تعریف نقش‌های جدید و انتصاب مجوزهای دسترسی.
+            <strong><a href="{{ route('panel.reports.index') }}" class="text-purple-600 hover:underline">گزارش‌ها و آمار سیستم:</a></strong> مشاهده تیکت‌های امروز، وضعیت‌ها، اولویت‌ها و گزارش SLA.
         </li>
         <li class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-blue-600"></span>
@@ -120,11 +116,7 @@
         </li>
         <li class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-blue-600"></span>
-            <strong><a href="{{ route('panel.companies.index') }}" class="text-blue-600 hover:underline">مدیریت شرکت‌ها و دپارتمان‌ها:</a></strong> تنظیم ساختار چندمشتری (Multi-Tenancy) و واحدهای سازمانی.
-        </li>
-        <li class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-blue-600"></span>
-            <strong><a href="{{ route('panel.tickets.index') }}" class="text-blue-600 hover:underline">مدیریت تیکت‌ها:</a></strong> پیگیری، ارجاع و پاسخ به درخواست‌های پشتیبانی کاربران.
+            <strong><a href="{{ route('panel.companies.index') }}" class="text-blue-600 hover:underline">مدیریت شرکت‌ها و دپارتمان‌ها:</a></strong> تنظیم ساختار چندمشتری (Multi-Tenancy).
         </li>
     </ul>
 </div>
