@@ -1,6 +1,5 @@
 <?php
 
-// database/migrations/2026_01_01_000008_create_ticket_logs_table.php
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -12,7 +11,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('ticket_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('action'); // created, status_changed, assigned و غیره
+            $table->string('action'); 
             $table->text('description')->nullable();
             $table->timestamps();
         });

@@ -9,8 +9,8 @@ return new class extends Migration {
     {
         Schema::create('permissions', function (Blueprint $table) {
             $table->id();
-            $table->string('name'); // نام فارسی دسترسی (مثلاً: ایجاد تیکت)
-            $table->string('slug')->unique(); // شناسه لاتین (مثلاً: ticket.create)
+            $table->string('name'); 
+            $table->string('slug')->unique(); 
             $table->string('display_name')->nullable();
             $table->string('group')->nullable();
             $table->foreignId('parent_id')

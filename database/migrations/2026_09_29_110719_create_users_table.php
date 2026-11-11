@@ -18,7 +18,7 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             
-            // سطوح دسترسی استاندارد پروژه
+           
             $table->enum('level', ['user', 'admin', 'creator'])->default('user');
 
             $table->rememberToken();
