@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Panel\AttachmentController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\LoginController;
@@ -22,6 +23,9 @@ Route::middleware('guest')->group(function () {
 // --------------------------------------------------------------------------
 Route::middleware('auth')->group(function () {
     Route::post('/logout', LogoutController::class)->name('logout');
+
+    Route::get('/ticket-attachments/{attachment}/download', [AttachmentController::class, 'download'])
+        ->name('ticket.attachments.download');
 
     // داشبورد کاربر عادی
     Route::get('/dashboard', function () {

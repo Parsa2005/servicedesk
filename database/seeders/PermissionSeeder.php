@@ -68,6 +68,7 @@ class PermissionSeeder extends Seeder
                     'tickets.internal-notes' => 'ثبت یادداشت داخلی (محرمانه)',
                     'tickets.status'         => 'تغییر وضعیت تیکت',
                     'tickets.manage'         => 'مدیریت کامل و حذف تیکت‌ها',
+                    'tickets.attachments.view' => 'مشاهده و دانلود فایل‌های پیوست (سراسری)',
                 ],
             ],
 

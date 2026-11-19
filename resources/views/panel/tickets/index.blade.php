@@ -65,7 +65,7 @@
                                 @endphp
                                 <span class="px-2.5 py-1 rounded-full text-xs font-semibold {{ $sClass }}">{{ $sName }}</span>
                             </td>
-                            <td class="p-4 text-slate-600 text-xs">{{ $ticket->assignedAdmin->name ?? 'تعیین نشده' }}</td>
+                            <td class="p-4 text-slate-600 text-xs">{{ $ticket->assigned->name ?? 'تعیین نشده' }}</td>
                             <td class="p-4 text-center">
                                 <a href="{{ route('panel.tickets.show', $ticket->id) }}" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-medium transition-colors">بررسی و پاسخ</a>
                             </td>
