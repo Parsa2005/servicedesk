@@ -16,21 +16,21 @@ class RoleController extends Controller
         $this->authorize('roles.index');
         
         $authUser = auth()->user();
-        // بارگذاری رابطه company و permissions برای نمایش در پنل creator
+        
         $query = Role::with(['company', 'permissions'])->withCount('permissions', 'users');
 
-        // 🛡️ ایزوله‌سازی Multi-Tenant: ادمین‌های عادی فقط نقش‌های شرکت خودشان را می‌بینند
+    
         if ($authUser->level !== 'creator') {
             $query->where('company_id', $authUser->company_id);
         } else {
-            // اگر کاربر creator بود، می‌تواند بر اساس شرکت فیلتر کند
+        
             if ($request->filled('company_id')) {
                 $query->where('company_id', $request->company_id);
             }
         }
 
         $roles = $query->latest()->paginate(10)->withQueryString();
-        $companies = Company::all(); // جهت استفاده در فیلترهای پنل creator
+        $companies = Company::all();
 
         return view('panel.roles.index', compact('roles', 'companies'));
     }
@@ -40,7 +40,7 @@ class RoleController extends Controller
         $this->authorize('roles.create');
         
         $authUser = auth()->user();
-        // اگر creator باشد می‌تواند نقش را برای هر شرکتی بسازد یا عمومی بگذارد
+        
         $companies = ($authUser->level === 'creator') ? Company::all() : collect();
         $permissionsGrouped = Permission::all()->groupBy('group');
 
@@ -53,12 +53,12 @@ class RoleController extends Controller
         
         $authUser = auth()->user();
 
-        // تعیین هوشمند شرکت برای نقش جدید
+        
         $companyId = ($authUser->level === 'creator') ? $request->company_id : $authUser->company_id;
 
         $request->validate([
             'name'          => ['required', 'string', 'max:255'],
-            // 🛡️ یکتا بودن slug فقط در محدوده همان شرکت (یا نقش‌های عمومی بدون شرکت)
+
             'slug'          => [
                 'required', 
                 'string', 
@@ -82,7 +82,7 @@ class RoleController extends Controller
             'company_id' => $companyId,
         ]);
 
-        // همگام‌سازی دسترسی‌ها
+        
         if ($request->has('permissions')) {
             $role->permissions()->sync($request->permissions);
         }
@@ -96,7 +96,7 @@ class RoleController extends Controller
         
         $authUser = auth()->user();
 
-        // 🛡️ بررسی امنیت: ادمین عادی حق ویرایش نقش شرکت دیگر را ندارد
+        
         if ($authUser->level !== 'creator' && $role->company_id !== $authUser->company_id) {
             abort(403, 'شما مجاز به ویرایش این نقش نیستید.');
         }
@@ -133,7 +133,7 @@ class RoleController extends Controller
                     } else {
                         $query->whereNull('company_id');
                     }
-                })->ignore($role->id) // نادیده گرفتن رکورد فعلی هنگام بررسی یکتایی
+                })->ignore($role->id) 
             ],
             'permissions'   => ['nullable', 'array'],
             'permissions.*' => ['exists:permissions,id'],
@@ -146,7 +146,7 @@ class RoleController extends Controller
             'company_id' => $companyId,
         ]);
 
-        // به‌روزرسانی دسترسی‌ها (اگر تیکی انتخاب نشده باشد آرایه خالی می‌فرستد تا دسترسی‌ها پاک شوند)
+        
         $role->permissions()->sync($request->input('permissions', []));
 
         return redirect()->route('panel.roles.index')->with('success', 'نقش با موفقیت به‌روزرسانی شد.');
@@ -158,7 +158,7 @@ class RoleController extends Controller
         
         $authUser = auth()->user();
 
-        // 🛡️ بررسی امنیت
+        
         if ($authUser->level !== 'creator' && $role->company_id !== $authUser->company_id) {
             abort(403, 'شما مجاز به حذف این نقش نیستید.');
         }

@@ -3,64 +3,40 @@
 namespace App\Http\Controllers\Panel;
 
 use App\Http\Controllers\Controller;
-use App\Models\Role;
-use App\Models\Ticket;
+use App\Services\DashboardService;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class DashboardController extends Controller
 {
-    public function index()
+    use AuthorizesRequests;
+
+    protected $dashboardService;
+
+    public function __construct(DashboardService $dashboardService)
     {
-        // آمار کارت‌های قبلی
-        $stats = [
-            'total_users'  => User::count(),
-            'admins_count' => User::where('level', 'creator')->orWhereHas('roles')->count(),
-            'roles_count'  => Role::count(),
-        ];
-
-        // 📊 آمار جدید درخواستی استاد
-        $today = Carbon::today();
-
-        $ticketStats = [
-            // تعداد تیکت‌های باز، در حال انجام، بسته شده امروز
-            'open_today'        => Ticket::whereDate('created_at', $today)->where('status', 'open')->count(),
-            'in_progress_today' => Ticket::whereDate('created_at', $today)->where('status', 'in_progress')->count(),
-            'resolved_today'    => Ticket::whereDate('created_at', $today)->where('status', 'resolved')->count(),
-            'closed_today'      => Ticket::whereDate('created_at', $today)->where('status', 'closed')->count(),
-            
-            // تیکت‌های عقب‌افتاده (Overdue / گذشته از SLA)
-            'overdue_count'     => Ticket::where('status', '!=', 'closed')->where('sla_due_at', '<', now())->count(),
-
-            // تعداد بر اساس وضعیت کل
-            'by_status'         => Ticket::selectRaw('status, count(*) as count')->groupBy('status')->pluck('count', 'status'),
-
-            // تعداد بر اساس اولویت
-            'by_priority'       => Ticket::selectRaw('priority, count(*) as count')->groupBy('priority')->pluck('count', 'priority'),
-
-            // درصد SLA (نسبت تیکت‌های حل شده به موقع به کل تیکت‌ها)
-            // (این فرض بر اساس فیلدهای معمول SLA است)
-            'sla_met_percentage' => 85, // می‌توانید فرمول دقیق محاسبه را بنویسید
-        ];
-        return view('panel.menu', compact('stats'));
+        $this->dashboardService = $dashboardService;
     }
 
+    public function index()
+    {
+        $this->authorize('view', User::class);
+
+        // دریافت تمام آمارها از سرویس
+        $dashboardData = $this->dashboardService->getDashboardStats(auth()->user());
+
+        $stats = $dashboardData['stats'];
+        $ticketStats = $dashboardData['ticketStats'];
+
+        return view('panel.menu', compact('stats', 'ticketStats'));
+    }
 
     public function reports()
-{
-    $today = Carbon::today();
+    {
+        $this->authorize('reports', User::class);
 
-    $ticketStats = [
-        'open_today'         => Ticket::whereDate('created_at', $today)->where('status', 'open')->count(),
-        'in_progress_today'  => Ticket::whereDate('created_at', $today)->where('status', 'in_progress')->count(),
-        'resolved_today'     => Ticket::whereDate('created_at', $today)->where('status', 'resolved')->count(),
-        'closed_today'       => Ticket::whereDate('created_at', $today)->where('status', 'closed')->count(),
-        'overdue_count'      => Ticket::where('status', '!=', 'closed')->where('sla_due_at', '<', now())->count(),
-        'by_status'          => Ticket::selectRaw('status, count(*) as count')->groupBy('status')->pluck('count', 'status'),
-        'by_priority'        => Ticket::selectRaw('priority, count(*) as count')->groupBy('priority')->pluck('count', 'priority'),
-        'sla_met_percentage' => 85, // یا فرمول دلخواه محاسبه SLA
-    ];
+        $ticketStats = $this->dashboardService->getReportStats(auth()->user());
 
-    return view('panel.reports.index', compact('ticketStats'));
-}
+        return view('panel.reports.index', compact('ticketStats'));
+    }
 }

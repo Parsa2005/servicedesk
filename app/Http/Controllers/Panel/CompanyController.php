@@ -4,105 +4,74 @@ namespace App\Http\Controllers\Panel;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
-use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use App\Http\Requests\CompanyRequest;
+use App\Services\CompanyService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class CompanyController extends Controller
 {
+    use AuthorizesRequests;
+
+    protected $companyService;
+
+    public function __construct(CompanyService $companyService)
+    {
+        $this->companyService = $companyService;
+    }
+
     public function index()
     {
-        $this->authorize('companies.index');
-        
-        // 👈 بارگذاری رابطه parent برای نمایش شرکت مادر در لیست
-        $companies = Company::with(['parent'])
-            ->withCount(['users', 'departments', 'tickets', 'children'])
-            ->latest()
-            ->paginate(10);
-            
+        $this->authorize('viewAny', Company::class);
+
+        $companies = $this->companyService->getPaginatedCompanies(auth()->user());
+
         return view('panel.companies.index', compact('companies'));
     }
 
     public function create()
     {
-        $this->authorize('companies.create');
-        
-        // 👈 ارسال لیست شرکت‌ها برای انتخاب به عنوان «شرکت مادر»
-        $companies = Company::all();
-        
+        $this->authorize('create', Company::class);
+
+        $companies = $this->companyService->getAllCompanies(auth()->user());
+
         return view('panel.companies.create', compact('companies'));
     }
 
-    public function store(Request $request)
+    public function store(CompanyRequest $request)
     {
-        $this->authorize('companies.create');
-        
-        $request->validate([
-            'name'      => ['required', 'string', 'max:255', 'unique:companies,name'],
-            'slug'      => ['nullable', 'string', 'max:255', 'unique:companies,slug'],
-            'parent_id' => ['nullable', 'exists:companies,id'], // 👈 اعتبارسنجی شرکت مادر
-            'is_active' => ['nullable', 'boolean'],
-        ]);
+        $this->companyService->createCompany($request->validatedData());
 
-        Company::create([
-            'name'      => $request->name,
-            'slug'      => $request->filled('slug') ? Str::slug($request->slug) : Str::slug($request->name),
-            'parent_id' => $request->parent_id, // 👈 ذخیره شرکت مادر
-            'is_active' => $request->boolean('is_active'),
-        ]);
-
-        return redirect()->route('panel.companies.index')->with('success', 'شرکت جدید با موفقیت ایجاد شد.');
+        return redirect()->route('panel.companies.index')
+            ->with('success', 'شرکت جدید با موفقیت ایجاد شد.');
     }
 
     public function edit(Company $company)
     {
-        $this->authorize('companies.edit');
-        
-        // 👈 ارسال لیست شرکت‌ها به جز خودِ شرکت (برای جلوگیری از اینکه خودش مادر خودش شود)
-        $companies = Company::where('id', '!=', $company->id)->get();
-        
+        $this->authorize('update', $company);
+
+        $companies = $this->companyService->getOtherCompanies($company, auth()->user());
+
         return view('panel.companies.edit', compact('company', 'companies'));
     }
 
-    public function update(Request $request, Company $company)
+    public function update(CompanyRequest $request, Company $company)
     {
-        $this->authorize('companies.edit');
-        
-        $request->validate([
-            'name'      => ['required', 'string', 'max:255', 'unique:companies,name,' . $company->id],
-            'slug'      => ['nullable', 'string', 'max:255', 'unique:companies,slug,' . $company->id],
-            'parent_id' => [
-                'nullable', 
-                'exists:companies,id',
-                function ($attribute, $value, $fail) use ($company) {
-                    // 🛡️ جلوگیری از انتخاب خود شرکت به عنوان والد
-                    if ($value == $company->id) {
-                        $fail('شرکت نمی‌تواند مادر خودش باشد.');
-                    }
-                }
-            ],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
+        $this->companyService->updateCompany($company, $request->validatedData());
 
-        $company->update([
-            'name'      => $request->name,
-            'slug'      => $request->filled('slug') ? Str::slug($request->slug) : Str::slug($request->name),
-            'parent_id' => $request->parent_id, // 👈 آپدیت شرکت مادر
-            'is_active' => $request->boolean('is_active'),
-        ]);
-
-        return redirect()->route('panel.companies.index')->with('success', 'اطلاعات شرکت با موفقیت ویرایش شد.');
+        return redirect()->route('panel.companies.index')
+            ->with('success', 'اطلاعات شرکت با موفقیت ویرایش شد.');
     }
 
     public function destroy(Company $company)
     {
-        $this->authorize('companies.delete');
+        $this->authorize('delete', $company);
 
-        // 🛡️ بررسی اینکه آیا شرکت زیرمجموعه‌ای دارد یا خیر
         if ($company->children()->count() > 0) {
             return back()->with('error', 'این شرکت دارای زیرمجموعه است؛ ابتدا باید زیرمجموعه‌های آن را تعیین تکلیف کنید.');
         }
 
-        $company->delete();
+        $this->companyService->deleteCompany($company);
+
         return back()->with('success', 'شرکت با موفقیت حذف شد.');
     }
 }

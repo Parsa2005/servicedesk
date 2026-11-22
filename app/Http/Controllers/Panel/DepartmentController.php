@@ -4,76 +4,70 @@ namespace App\Http\Controllers\Panel;
 
 use App\Http\Controllers\Controller;
 use App\Models\Department;
-use App\Models\Company;
-use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use App\Http\Requests\DepartmentRequest;
+use App\Services\DepartmentService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class DepartmentController extends Controller
 {
+    use AuthorizesRequests;
+
+    protected $departmentService;
+
+    public function __construct(DepartmentService $departmentService)
+    {
+        $this->departmentService = $departmentService;
+    }
+
     public function index()
     {
-        $this->authorize('departments.index');
-        
-        $departments = Department::with('company')->withCount('users')->latest()->paginate(10);
-        
-        // 👈 حذف 'users' چون در این متد کوئری زده نشده است
+        $this->authorize('viewAny', Department::class);
+
+        $departments = $this->departmentService->getPaginatedDepartments(auth()->user());
+
         return view('panel.departments.index', compact('departments'));
     }
 
     public function create()
     {
-        $this->authorize('departments.create');
-        $companies = Company::where('is_active', true)->get();
+        $this->authorize('create', Department::class);
+
+        $companies = $this->departmentService->getActiveCompanies(auth()->user());
+
         return view('panel.departments.create', compact('companies'));
     }
 
-    public function store(Request $request)
+    public function store(DepartmentRequest $request)
     {
-        $this->authorize('departments.create');
-        $request->validate([
-            'company_id' => ['required', 'exists:companies,id'],
-            'name'       => ['required', 'string', 'max:255'],
-            'slug'       => ['nullable', 'string', 'max:255'],
-        ]);
+        $this->departmentService->createDepartment($request->validatedData());
 
-        Department::create([
-            'company_id' => $request->company_id,
-            'name'       => $request->name,
-            'slug'       => Str::slug($request->name), // 👈 تولید خودکار اسلاگ
-        ]);
-
-        return redirect()->route('panel.departments.index')->with('success', 'دپارتمان جدید با موفقیت ایجاد شد.');
+        return redirect()->route('panel.departments.index')
+            ->with('success', 'دپارتمان جدید با موفقیت ایجاد شد.');
     }
 
     public function edit(Department $department)
     {
-        $this->authorize('departments.edit');
-        $companies = Company::where('is_active', true)->get();
+        $this->authorize('update', $department);
+
+        $companies = $this->departmentService->getActiveCompanies(auth()->user());
+
         return view('panel.departments.edit', compact('department', 'companies'));
     }
 
-    public function update(Request $request, Department $department)
+    public function update(DepartmentRequest $request, Department $department)
     {
-        $this->authorize('departments.edit');
-        $request->validate([
-            'company_id' => ['required', 'exists:companies,id'],
-            'name'       => ['required', 'string', 'max:255'],
-            'slug'       => ['nullable', 'string', 'max:255'],
-        ]);
+        $this->departmentService->updateDepartment($department, $request->validatedData());
 
-        $department->update([
-            'company_id' => $request->company_id,
-            'name'       => $request->name,
-            'slug'       => $request->filled('slug') ? Str::slug($request->slug) : Str::slug($request->name),
-        ]);
-
-        return redirect()->route('panel.departments.index')->with('success', 'اطلاعات دپارتمان با موفقیت ویرایش شد.');
+        return redirect()->route('panel.departments.index')
+            ->with('success', 'اطلاعات دپارتمان با موفقیت ویرایش شد.');
     }
 
     public function destroy(Department $department)
     {
-        $this->authorize('departments.delete');
-        $department->delete();
-        return back()->with('success', 'نقش با موفقیت حذف شد.');
+        $this->authorize('delete', $department);
+
+        $this->departmentService->deleteDepartment($department);
+
+        return back()->with('success', 'دپارتمان با موفقیت حذف شد.');
     }
 }

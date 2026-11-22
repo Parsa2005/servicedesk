@@ -7,23 +7,89 @@ use App\Models\User;
 use App\Models\Role;
 use App\Models\Department;
 use App\Models\Company;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 
 class MembershipController extends Controller
 {
+    use AuthorizesRequests;
+
+    protected function isCreator(User $user): bool
+    {
+        return $user->level === 'creator'
+            || (method_exists($user, 'isCreator') && $user->isCreator());
+    }
+
+    protected function isCompanyManager(User $user): bool
+    {
+        return $user->roles()->where('slug', 'company-manager')->exists();
+    }
+
+    /**
+     * null = همه شرکت‌ها (فقط creator)
+     * array = خود شرکت + زیرمجموعه‌ها (برای company-manager)
+     * int = فقط شرکت خودش (برای سایر کاربران)
+     */
+    protected function resolveCompanyScope(User $user): null|array|int
+    {
+        if ($this->isCreator($user)) {
+            return null;
+        }
+
+        if ($this->isCompanyManager($user) && $user->company) {
+            return $user->company->getDescendantCompanyIds();
+        }
+
+        return $user->company_id ? (int) $user->company_id : null;
+    }
+
+    protected function canAccessCompany(User $user, ?int $companyId): bool
+    {
+        if ($this->isCreator($user)) {
+            return true;
+        }
+
+        if (!$companyId) {
+            return false;
+        }
+
+        $scope = $this->resolveCompanyScope($user);
+
+        if (is_array($scope)) {
+            return in_array((int) $companyId, $scope, true);
+        }
+
+        return (int) $scope === (int) $companyId;
+    }
+
     /**
      * نمایش لیست کاربران و اعضای سازمان با ایزوله‌سازی Multi-Tenant
      */
     public function index(Request $request)
     {
-        $this->authorize('users.view');
+        $this->authorize('viewAny', User::class);
         $user = auth()->user();
-        
+        $scope = $this->resolveCompanyScope($user);
+
         $query = User::with(['company', 'department', 'roles']);
 
-        // اگر ادمین کل (creator) نباشد، فقط کاربران شرکت خودش را می‌بیند
-        if ($user->level !== 'creator') {
-            $query->where('company_id', $user->company_id);
+        if (is_array($scope)) {
+            $query->whereIn('company_id', $scope);
+
+            if ($request->filled('company_id')) {
+                $companyId = (int) $request->company_id;
+                if (in_array($companyId, $scope, true)) {
+                    $query->where('company_id', $companyId);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            }
+        } elseif ($scope !== null) {
+            $query->where('company_id', $scope);
+
+            if ($request->filled('company_id') && (int) $request->company_id !== $scope) {
+                $query->whereRaw('1 = 0');
+            }
         } else {
             if ($request->filled('company_id')) {
                 $query->where('company_id', $request->company_id);
@@ -31,19 +97,32 @@ class MembershipController extends Controller
         }
 
         if ($request->filled('search')) {
-            $query->where(function($q) use ($request) {
-                $q->where('name', 'like', "%{$request->search}%")
-                  ->orWhere('email', 'like', "%{$request->search}%");
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
         $users = $query->latest()->paginate(10)->withQueryString();
-        $companies = Company::where('is_active', true)->get();
 
-        // دریافت دپارتمان‌ها بر اساس سطح دسترسی برای فیلتر دینامیک در مودال
-        $departments = ($user->level === 'creator') 
-            ? Department::all() 
-            : Department::where('company_id', $user->company_id)->get();
+        // لیست شرکت‌های فعال در محدوده دسترسی
+        $companiesQuery = Company::where('is_active', true)->orderBy('name');
+        if (is_array($scope)) {
+            $companiesQuery->whereIn('id', $scope);
+        } elseif ($scope !== null) {
+            $companiesQuery->where('id', $scope);
+        }
+        $companies = $companiesQuery->get();
+
+        // دریافت دپارتمان‌ها بر اساس قلمرو دسترسی برای فیلتر دینامیک در مودال
+        $departmentsQuery = Department::with('company')->orderBy('name');
+        if (is_array($scope)) {
+            $departmentsQuery->whereIn('company_id', $scope);
+        } elseif ($scope !== null) {
+            $departmentsQuery->where('company_id', $scope);
+        }
+        $departments = $departmentsQuery->get();
 
         return view('panel.membership.index', compact('users', 'companies', 'departments'));
     }
@@ -53,26 +132,34 @@ class MembershipController extends Controller
      */
     public function edit(User $user)
     {
-        $this->authorize('users.edit');
+        $this->authorize('update', $user);
         $authUser = auth()->user();
 
-        // بررسی امنیت Multi-Tenant
-        if ($authUser->level !== 'creator' && $user->company_id !== $authUser->company_id) {
+        if (!$this->canAccessCompany($authUser, $user->company_id)) {
             abort(403, 'شما مجاز به ویرایش عضویت این کاربر نیستید.');
         }
 
         $user->load(['roles', 'department', 'company']);
+        $scope = $this->resolveCompanyScope($authUser);
 
-        // 👈 اگر کاربر creator است همه دپارتمان‌ها و شرکت‌ها را بفرست، در غیر این صورت فقط شرکت و دپارتمان‌های شرکت خودش
-        $companies = ($authUser->level === 'creator') 
-            ? Company::where('is_active', true)->get() 
-            : Company::where('id', $authUser->company_id)->get();
+        $companiesQuery = Company::where('is_active', true)->orderBy('name');
+        $departmentsQuery = Department::with('company')->orderBy('name');
 
-        $departments = ($authUser->level === 'creator') 
-            ? Department::all() 
-            : Department::where('company_id', $authUser->company_id)->get();
+        if (is_array($scope)) {
+            $companiesQuery->whereIn('id', $scope);
+            $departmentsQuery->whereIn('company_id', $scope);
+        } elseif ($scope !== null) {
+            $companiesQuery->where('id', $scope);
+            $departmentsQuery->where('company_id', $scope);
+        }
 
-        $roles = Role::where('company_id', $user->company_id)->get();
+        $companies = $companiesQuery->get();
+        $departments = $departmentsQuery->get();
+
+        $roles = Role::where(function ($q) use ($user) {
+            $q->where('company_id', $user->company_id)
+              ->orWhereNull('company_id');
+        })->orderBy('name')->get();
 
         return view('panel.membership.edit', compact('user', 'roles', 'departments', 'companies'));
     }
@@ -82,31 +169,36 @@ class MembershipController extends Controller
      */
     public function update(Request $request, User $user)
     {
-        $this->authorize('users.edit');
+        $this->authorize('update', $user);
         $authUser = auth()->user();
 
-        // بررسی امنیت Multi-Tenant
-        if ($authUser->level !== 'creator' && $user->company_id !== $authUser->company_id) {
+        if (!$this->canAccessCompany($authUser, $user->company_id)) {
             abort(403, 'شما مجاز به ویرایش عضویت این کاربر نیستید.');
         }
 
-        // استفاده از sometimes برای اینکه اگر نام یا ایمیل در مودال ارسال نشد خطا ندهد
+        $canChangeCompany = $this->isCreator($authUser) || $this->isCompanyManager($authUser);
+
         $request->validate([
             'name'          => ['sometimes', 'required', 'string', 'max:255'],
             'email'         => ['sometimes', 'required', 'email', 'unique:users,email,' . $user->id],
             'department_id' => ['nullable', 'exists:departments,id'],
-            'company_id'    => [$authUser->level === 'creator' ? 'required' : 'nullable', 'exists:companies,id'],
+            'company_id'    => [$canChangeCompany ? 'nullable' : 'nullable', 'exists:companies,id'],
             'roles'         => ['nullable', 'array'],
             'roles.*'       => ['exists:roles,id'],
         ]);
 
-        $targetCompanyId = ($authUser->level === 'creator' && $request->filled('company_id')) 
-            ? $request->company_id 
-            : $user->company_id;
+        $targetCompanyId = ($canChangeCompany && $request->filled('company_id'))
+            ? (int) $request->company_id
+            : (int) $user->company_id;
 
-        // بررسی اعتبار نقش‌های انتخابی
+        if ($request->filled('company_id') && !$this->canAccessCompany($authUser, $targetCompanyId)) {
+            return back()->with('error', 'شرکت انتخاب‌شده خارج از محدوده دسترسی شماست.');
+        }
+
+        // بررسی اعتبار نقش‌های انتخابی (متعلق به شرکت هدف یا نقش پایه سراسری)
         if ($request->has('roles')) {
             $invalidRoles = Role::whereIn('id', $request->roles)
+                ->whereNotNull('company_id')
                 ->where('company_id', '!=', $targetCompanyId)
                 ->exists();
 
@@ -117,21 +209,18 @@ class MembershipController extends Controller
 
         $updateData = [];
 
-        // ویرایش نام (فقط در صورت ارسال)
-        if ($request->filled('name') && ($authUser->hasPermission('users.edit.name') || $authUser->level === 'creator' || $authUser->level === 'admin')) {
+        if ($request->filled('name') && ($authUser->hasPermission('users.edit.name') || $this->isCreator($authUser) || $this->isCompanyManager($authUser) || $authUser->level === 'admin')) {
             $updateData['name'] = $request->name;
         }
 
-        // ویرایش ایمیل (فقط در صورت ارسال)
-        if ($request->filled('email') && ($authUser->hasPermission('users.edit.email') || $authUser->level === 'creator' || $authUser->level === 'admin')) {
+        if ($request->filled('email') && ($authUser->hasPermission('users.edit.email') || $this->isCreator($authUser) || $this->isCompanyManager($authUser) || $authUser->level === 'admin')) {
             $updateData['email'] = $request->email;
         }
 
-        // ویرایش شرکت و دپارتمان (ارسال‌شده از مودال یا فرم)
-        if ($authUser->hasPermission('users.edit.company') || $authUser->level === 'creator' || $authUser->level === 'admin') {
-            if ($request->has('company_id')) {
+        if ($authUser->hasPermission('users.edit.company') || $this->isCreator($authUser) || $this->isCompanyManager($authUser) || $authUser->level === 'admin') {
+            if ($request->has('company_id') || $request->has('department_id')) {
                 $updateData['company_id'] = $targetCompanyId;
-                $updateData['department_id'] = $request->filled('department_id') ? $request->department_id : null;
+                $updateData['department_id'] = $request->filled('department_id') ? (int) $request->department_id : null;
             }
         }
 
@@ -139,9 +228,8 @@ class MembershipController extends Controller
             $user->update($updateData);
         }
 
-        // همگام‌سازی نقش‌های سازمانی کاربر (در صورت ارسال)
-        if ($request->has('roles') && ($authUser->hasPermission('users.edit.role') || $authUser->level === 'creator' || $authUser->level === 'admin')) {
-            $user->roles()->sync($request->roles);
+        if ($request->has('roles') && ($authUser->hasPermission('users.edit.role') || $this->isCreator($authUser) || $this->isCompanyManager($authUser) || $authUser->level === 'admin')) {
+            $user->roles()->sync($request->roles ?? []);
         }
 
         return redirect()->route('panel.membership.index')
