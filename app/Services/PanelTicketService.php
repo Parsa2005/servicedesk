@@ -8,23 +8,50 @@ use Illuminate\Http\Request;
 
 class PanelTicketService
 {
+    protected function isCompanyManager(User $user): bool
+    {
+        return $user->roles()->where('slug', 'company-manager')->exists();
+    }
+
+    protected function allowedCompanyIds(User $user): ?array
+    {
+        if ($user->level === 'creator' || (method_exists($user, 'isCreator') && $user->isCreator())) {
+            return null;
+        }
+
+        if ($this->isCompanyManager($user) && $user->company) {
+            return $user->company->getDescendantCompanyIds();
+        }
+
+        return $user->company_id ? [(int) $user->company_id] : [];
+    }
+
     public function getFilteredTickets(Request $request, User $user)
     {
-        $hasPermission = ($user->level === 'creator' || $user->hasPermission('tickets.index') || $user->hasPermission('tickets.view') || $user->hasPermission('tickets.manage'));
+        $isManager = $this->isCompanyManager($user);
+        $hasPermission = ($user->level === 'creator'
+            || $isManager
+            || $user->hasPermission('tickets.index')
+            || $user->hasPermission('tickets.view')
+            || $user->hasPermission('tickets.manage'));
 
         if (!$hasPermission) {
             return Ticket::whereRaw('1 = 0')->paginate(15);
         }
 
         $query = Ticket::with(['user', 'category', 'department', 'company', 'assigned']);
+        $allowedCompanyIds = $this->allowedCompanyIds($user);
 
-        if ($user->level !== 'creator') {
-            $query->where('company_id', $user->company_id);
+        if ($allowedCompanyIds !== null) {
+            $query->where(function ($q) use ($allowedCompanyIds) {
+                $q->whereIn('company_id', $allowedCompanyIds)
+                  ->orWhereIn('target_company_id', $allowedCompanyIds);
+            });
 
-            if ($user->level === 'user') {
-                $query->where('user_id', $user->id);
-            } else {
-                if ($user->department_id && !$user->hasPermission('tickets.view-all')) {
+            if (!$isManager) {
+                if ($user->level === 'user') {
+                    $query->where('user_id', $user->id);
+                } elseif ($user->department_id && !$user->hasPermission('tickets.view-all')) {
                     $query->where('department_id', $user->department_id);
                 }
             }
@@ -41,8 +68,9 @@ class PanelTicketService
     {
         $isAuthor = ($ticket->user_id === $user->id);
         $isInternal = $request->boolean('is_internal');
+        $isElevated = ($user->level === 'creator' || $this->isCompanyManager($user));
 
-        if ($isInternal && !$isAuthor && $user->level !== 'creator' && !$user->hasPermission('tickets.internal-notes')) {
+        if ($isInternal && !$isAuthor && !$isElevated && !$user->hasPermission('tickets.internal-notes')) {
             return ['status' => false, 'message' => 'شما مجوز ثبت یادداشت داخلی را ندارید.'];
         }
 
@@ -51,7 +79,7 @@ class PanelTicketService
                 ->push($ticket->user_id)
                 ->unique();
 
-            if (!$participantIds->contains($user->id) && !$isAuthor && $user->level !== 'creator') {
+            if (!$participantIds->contains($user->id) && !$isAuthor && !$isElevated) {
                 if ($participantIds->count() >= 2) {
                     return ['status' => false, 'message' => 'طبق قوانین، حداکثر ۲ نفر می‌توانند در این تیکت به صورت مستقیم گفتگو کنند.'];
                 }
@@ -74,9 +102,15 @@ class PanelTicketService
     public function assignExpert(Request $request, Ticket $ticket, User $authUser): array
     {
         $targetUser = User::findOrFail($request->assigned_to);
+        $allowedCompanyIds = $this->allowedCompanyIds($authUser);
 
-        if ($authUser->level !== 'creator' && $targetUser->company_id !== $ticket->company_id) {
-            return ['status' => false, 'message' => 'کارشناس انتخاب‌شده متعلق به این شرکت نیست.'];
+        if ($allowedCompanyIds !== null) {
+            $isTicketInScope = in_array((int) $ticket->company_id, $allowedCompanyIds, true)
+                || in_array((int) $ticket->target_company_id, $allowedCompanyIds, true);
+
+            if (!$isTicketInScope || !in_array((int) $targetUser->company_id, $allowedCompanyIds, true)) {
+                return ['status' => false, 'message' => 'کارشناس انتخاب‌شده در محدوده شرکت‌های مجاز شما نیست.'];
+            }
         }
 
         $ticket->update([

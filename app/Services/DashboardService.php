@@ -10,19 +10,45 @@ use Illuminate\Support\Carbon;
 class DashboardService
 {
     /**
-     * محاسبه آمارهای داشبورد مدیریت با احتساب سطح دسترسی و شرکت کاربر
+     * برگرداندن آرایه شناسه‌های شرکت مجاز:
+     * null = همه شرکت‌ها (فقط creator)
+     * array = خود شرکت + زیرمجموعه‌ها
+     */
+    protected function allowedCompanyIds(User $authUser): ?array
+    {
+        if ($authUser->isCreator()) {
+            return null;
+        }
+
+        if ($authUser->company) {
+            return $authUser->company->getDescendantCompanyIds();
+        }
+
+        return $authUser->company_id ? [(int) $authUser->company_id] : [];
+    }
+
+    /**
+     * محاسبه آمارهای داشبورد مدیریت با احتساب سطح دسترسی و قلمرو شرکت‌ها
      */
     public function getDashboardStats(User $authUser): array
     {
+        $allowedIds = $this->allowedCompanyIds($authUser);
+
         $userQuery = User::query();
         $ticketQuery = Ticket::query();
+        $roleQuery = Role::query();
 
-        // 🛡️ اگر ادمین کل (creator) نباشد، آمارها فقط مربوط به شرکت خودش است
-        if (!$authUser->isCreator()) {
-            $userQuery->where('company_id', $authUser->company_id);
-            $ticketQuery->where(function ($q) use ($authUser) {
-                $q->where('company_id', $authUser->company_id)
-                  ->orWhere('target_company_id', $authUser->company_id);
+        if ($allowedIds !== null) {
+            $userQuery->whereIn('company_id', $allowedIds);
+
+            $ticketQuery->where(function ($q) use ($allowedIds) {
+                $q->whereIn('company_id', $allowedIds)
+                  ->orWhereIn('target_company_id', $allowedIds);
+            });
+
+            $roleQuery->where(function ($q) use ($allowedIds) {
+                $q->whereIn('company_id', $allowedIds)
+                  ->orWhereNull('company_id');
             });
         }
 
@@ -31,7 +57,7 @@ class DashboardService
             'admins_count' => (clone $userQuery)->where(function ($q) {
                 $q->where('level', 'creator')->orWhereHas('roles');
             })->count(),
-            'roles_count'  => Role::count(),
+            'roles_count'  => (clone $roleQuery)->count(),
         ];
 
         $today = Carbon::today();
@@ -58,12 +84,13 @@ class DashboardService
      */
     public function getReportStats(User $authUser): array
     {
+        $allowedIds = $this->allowedCompanyIds($authUser);
         $ticketQuery = Ticket::query();
 
-        if (!$authUser->isCreator()) {
-            $ticketQuery->where(function ($q) use ($authUser) {
-                $q->where('company_id', $authUser->company_id)
-                  ->orWhere('target_company_id', $authUser->company_id);
+        if ($allowedIds !== null) {
+            $ticketQuery->where(function ($q) use ($allowedIds) {
+                $q->whereIn('company_id', $allowedIds)
+                  ->orWhereIn('target_company_id', $allowedIds);
             });
         }
 
@@ -81,7 +108,6 @@ class DashboardService
         ];
     }
 
-    
     protected function calculateSlaPercentage($ticketQuery): int
     {
         $totalResolvedOrClosed = (clone $ticketQuery)->whereIn('status', ['resolved', 'closed'])->count();
