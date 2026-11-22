@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Panel\SlaController;
 use App\Http\Controllers\Panel\TicketCategoryController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Panel\CompanyController;
@@ -53,4 +54,8 @@ Route::middleware(['auth', 'level:creator,admin'])
 
         Route::resource('categories', TicketCategoryController::class)->except(['destroy']);
         Route::delete('categories/{category}', [TicketCategoryController::class, 'destroy'])->name('categories.destroy');
+
+
+        Route::get('/slas', [SlaController::class, 'index'])->name('slas.index');
+        Route::put('/slas', [SlaController::class, 'update'])->name('slas.update');
     });
