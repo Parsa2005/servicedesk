@@ -24,7 +24,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // ۱. سازنده سیستم (Creator) همیشه دسترسی کامل دارد (بایپس کردن تمام گیت‌ها)
         Gate::before(function ($user, $ability) {
-            if ($user->level === 'creator') {
+            if (in_array($user->level, ['creator', 'admin'], true)) {
                 return true;
             }
         });
