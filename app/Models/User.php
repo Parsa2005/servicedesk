@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -44,26 +43,23 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class, 'role_user');
     }
 
-    /**
-     * بررسی مجوزهای کاربر بر اساس سطح و نقش‌ها
-     */
+    public function isCreator(): bool
+    {
+        return $this->level === 'creator';
+    }
+    
     public function hasPermission(string $slug): bool
     {
-        // اگر کاربر سطحش عادی (user) بود، کلاً هیچ دسترسی ادمینی ندارد
         if ($this->level === 'user') {
             return false;
         }
-
-        // اگر کاربر سازنده/ادمین کل بود، تمام دسترسی‌ها را دارد
-        if ($this->level === 'creator') {
+        
+        if ($this->isCreator()) {
             return true;
         }
-
-        // بررسی اینکه آیا نقش‌های کاربر شامل این مجوز (slug) هستند یا خیر
+        
         return $this->roles()->whereHas('permissions', function ($query) use ($slug) {
             $query->where('slug', $slug);
         })->exists();
     }
-
-
 }
