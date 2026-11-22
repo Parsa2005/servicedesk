@@ -82,6 +82,13 @@ class PermissionSeeder extends Seeder
                 ],
             ],
 
+            'slas' => [
+                'display_name' => 'تنظیمات SLA شرکت‌ها',
+                'permissions' => [
+                    'slas.manage' => 'مدیریت زمان‌بندی SLA شرکت',
+                ],
+            ],
+
         ];
 
         foreach ($groups as $group => $data) {
