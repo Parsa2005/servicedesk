@@ -98,6 +98,15 @@
             </div>
         </div>
     </a>
+    <a href="{{ route('panel.slas.index') }}" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 hover:border-indigo-500/50 hover:shadow-md transition-all group">
+        <div class="flex items-center gap-4">
+            <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl text-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">🏭</div>
+            <div>
+                <h4 class="font-bold text-slate-800">مدیریت زمان بندی</h4>
+                <p class="text-slate-500 text-xs mt-1"> مخصوص مدیران شرکت ها و مالک سایت </p>
+            </div>
+        </div>
+    </a>
 </div>
 
 <!-- بخش راهنما و دسترسی‌های متن‌محور -->
