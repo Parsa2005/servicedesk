@@ -2,25 +2,51 @@
 
 namespace App\Policies;
 
+use App\Models\Ticket;
+use App\Models\User;
+
 class PanelTicketPolicy
 {
-    public function viewAny(\App\Models\User $user): bool
+    protected function canAccessTicket(User $user, Ticket $ticket): bool
     {
-        return $user->level === 'creator' || 
-               $user->hasPermission('tickets.index') || 
-               $user->hasPermission('tickets.view') || 
-               $user->hasPermission('tickets.manage');
+        if ($user->level === 'creator') {
+            return true;
+        }
+
+        $isManager = $user->roles()->where('slug', 'company-manager')->exists();
+        if ($isManager && $user->company) {
+            $allowedIds = $user->company->getDescendantCompanyIds();
+            return in_array((int) $ticket->company_id, $allowedIds, true)
+                || in_array((int) $ticket->target_company_id, $allowedIds, true);
+        }
+
+        return (int) $ticket->company_id === (int) $user->company_id
+            || (int) $ticket->target_company_id === (int) $user->company_id;
     }
 
-    public function view(\App\Models\User $user, \App\Models\Ticket $ticket): bool
+    public function viewAny(User $user): bool
     {
-        if ($user->level !== 'creator' && $ticket->company_id !== $user->company_id) {
+        return $user->level === 'creator'
+            || $user->roles()->where('slug', 'company-manager')->exists()
+            || $user->hasPermission('tickets.index')
+            || $user->hasPermission('tickets.view')
+            || $user->hasPermission('tickets.manage');
+    }
+
+    public function view(User $user, Ticket $ticket): bool
+    {
+        if ($user->level === 'creator') {
+            return true;
+        }
+
+        if (!$this->canAccessTicket($user, $ticket)) {
             return false;
         }
 
         $isAuthor = ($ticket->user_id === $user->id);
+        $isManager = $user->roles()->where('slug', 'company-manager')->exists();
 
-        if ($isAuthor || $user->level === 'creator') {
+        if ($isAuthor || $isManager) {
             return true;
         }
 
@@ -31,46 +57,55 @@ class PanelTicketPolicy
         return true;
     }
 
-    public function reply(\App\Models\User $user, \App\Models\Ticket $ticket): bool
+    public function reply(User $user, Ticket $ticket): bool
     {
-        if ($user->level !== 'creator' && $ticket->company_id !== $user->company_id) {
+        if ($user->level === 'creator') {
+            return true;
+        }
+
+        if (!$this->canAccessTicket($user, $ticket)) {
             return false;
         }
 
         $isAuthor = ($ticket->user_id === $user->id);
-        $hasReplyPermission = ($user->level === 'creator' || $user->hasPermission('tickets.reply'));
+        $isManager = $user->roles()->where('slug', 'company-manager')->exists();
 
-        return $isAuthor || $hasReplyPermission;
+        return $isAuthor || $isManager || $user->hasPermission('tickets.reply');
     }
 
-    public function manage(\App\Models\User $user, \App\Models\Ticket $ticket): bool
+    public function manage(User $user, Ticket $ticket): bool
     {
-        return $user->level === 'creator' || $ticket->company_id === $user->company_id;
+        return $this->canAccessTicket($user, $ticket);
     }
 
-    public function close(\App\Models\User $user, \App\Models\Ticket $ticket): bool
+    public function close(User $user, Ticket $ticket): bool
     {
         if (!$this->manage($user, $ticket)) {
             return false;
         }
 
         $isAuthor = ($ticket->user_id === $user->id);
-        $hasManagePermission = ($user->level === 'creator' || 
-                                $user->hasPermission('tickets.manage') || 
-                                $user->hasPermission('tickets.close') || 
-                                $ticket->department_id === $user->department_id);
+        $isManager = $user->roles()->where('slug', 'company-manager')->exists();
+        $hasManagePermission = ($user->level === 'creator'
+            || $isManager
+            || $user->hasPermission('tickets.manage')
+            || $user->hasPermission('tickets.close')
+            || $ticket->department_id === $user->department_id);
 
         return $isAuthor || $hasManagePermission;
     }
 
-    public function delete(\App\Models\User $user, \App\Models\Ticket $ticket): bool
+    public function delete(User $user, Ticket $ticket): bool
     {
         if (!$this->manage($user, $ticket)) {
             return false;
         }
 
-        return $user->level === 'creator' || 
-               $user->hasPermission('tickets.delete') || 
-               $user->hasPermission('tickets.manage');
+        $isManager = $user->roles()->where('slug', 'company-manager')->exists();
+
+        return $user->level === 'creator'
+            || $isManager
+            || $user->hasPermission('tickets.delete')
+            || $user->hasPermission('tickets.manage');
     }
 }

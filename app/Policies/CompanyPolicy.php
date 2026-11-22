@@ -7,9 +7,31 @@ use App\Models\User;
 
 class CompanyPolicy
 {
+    /**
+     * بررسی اینکه آیا شرکت هدف در قلمرو مجاز کاربر قرار دارد یا خیر
+     * - creator: به همه شرکت‌ها دسترسی دارد
+     * - سایر کاربران دارای پرمیسن: فقط خود شرکت و شرکت‌های زیرمجموعه
+     */
+    protected function isCompanyInScope(User $user, Company $company): bool
+    {
+        if ($user->isCreator()) {
+            return true;
+        }
+
+        if (!$user->company) {
+            return false;
+        }
+
+        $allowedIds = $user->company->getDescendantCompanyIds();
+
+        return in_array((int) $company->id, $allowedIds, true);
+    }
+
     public function viewAny(User $user): bool
     {
-        return $user->isCreator() || $user->hasPermission('companies.index') || $user->hasPermission('companies.view');
+        return $user->isCreator()
+            || $user->hasPermission('companies.index')
+            || $user->hasPermission('companies.view');
     }
 
     public function create(User $user): bool
@@ -19,11 +41,19 @@ class CompanyPolicy
 
     public function update(User $user, Company $company): bool
     {
-        return $user->isCreator() || $user->hasPermission('companies.edit');
+        if ($user->isCreator()) {
+            return true;
+        }
+
+        return $user->hasPermission('companies.edit') && $this->isCompanyInScope($user, $company);
     }
 
     public function delete(User $user, Company $company): bool
     {
-        return $user->isCreator() || $user->hasPermission('companies.delete');
+        if ($user->isCreator()) {
+            return true;
+        }
+
+        return $user->hasPermission('companies.delete') && $this->isCompanyInScope($user, $company);
     }
 }

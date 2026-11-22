@@ -7,43 +7,48 @@ use App\Models\User;
 
 class TicketPolicy
 {
-    
-    public function viewAny(User $user): bool
+    protected function isRelatedCompany(User $user, Ticket $ticket): bool
     {
-        return true; 
-    }
-
-    /**
-     * بررسی مجوز مشاهده یک تیکت خاص
-     */
-    public function view(User $user, Ticket $ticket): bool
-    {
-        // اگر ادمین کل (کریتور) است یا پرمیشن مشاهده همه را دارد
-        if ($user->isCreator() || $user->hasPermission('tickets.view-all')) {
+        if ($user->isCreator()) {
             return true;
         }
 
-        // اگر کاربر نویسنده تیکت یا پشتیبان مسئول است
-        if ($ticket->user_id === $user->id || $ticket->assigned_to === $user->id) {
-            return true;
+        $isManager = $user->roles()->where('slug', 'company-manager')->exists();
+        if ($isManager && $user->company) {
+            $allowedIds = $user->company->getDescendantCompanyIds();
+            return in_array((int) $ticket->company_id, $allowedIds, true)
+                || in_array((int) $ticket->target_company_id, $allowedIds, true);
         }
 
         if (empty($user->company_id)) {
             return false;
         }
 
-        // بررسی اینکه تیکت مربوط به شرکت کاربر یا شرکت مقصد است
-        $isRelatedCompany = ($user->company_id === $ticket->company_id || $user->company_id === $ticket->target_company_id);
-
-        return $isRelatedCompany;
+        return (int) $user->company_id === (int) $ticket->company_id
+            || (int) $user->company_id === (int) $ticket->target_company_id;
     }
 
-    /**
-     * اجازه ایجاد تیکت جدید
-     */
+    public function viewAny(User $user): bool
+    {
+        return true;
+    }
+
+    public function view(User $user, Ticket $ticket): bool
+    {
+        if ($user->isCreator() || $user->hasPermission('tickets.view-all')) {
+            return true;
+        }
+
+        if ($ticket->user_id === $user->id || $ticket->assigned_to === $user->id) {
+            return true;
+        }
+
+        return $this->isRelatedCompany($user, $ticket);
+    }
+
     public function create(User $user): bool
     {
-        return true; 
+        return true;
     }
 
     public function update(User $user, Ticket $ticket): bool
@@ -55,7 +60,6 @@ class TicketPolicy
         return $ticket->canBeEditedBy($user);
     }
 
-    
     public function reply(User $user, Ticket $ticket): bool
     {
         if (!$this->view($user, $ticket)) {
@@ -66,18 +70,22 @@ class TicketPolicy
             return true;
         }
 
-        return $user->isCreator() || $user->hasPermission('tickets.reply');
+        return $user->isCreator()
+            || $user->roles()->where('slug', 'company-manager')->exists()
+            || $user->hasPermission('tickets.reply');
     }
 
-    
     public function close(User $user, Ticket $ticket): bool
     {
         if ($ticket->user_id === $user->id) {
             return true;
         }
 
-        $hasManagePermission = ($user->isCreator() || $user->hasPermission('tickets.manage') || $user->hasPermission('tickets.close'));
+        $hasManagePermission = $user->isCreator()
+            || $user->roles()->where('slug', 'company-manager')->exists()
+            || $user->hasPermission('tickets.manage')
+            || $user->hasPermission('tickets.close');
 
-        return ($ticket->target_company_id === $user->company_id) && $hasManagePermission;
+        return $this->isRelatedCompany($user, $ticket) && $hasManagePermission;
     }
 }
