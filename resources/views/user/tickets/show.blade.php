@@ -93,7 +93,8 @@
                                 <span class="text-muted small d-block mb-2 fw-semibold">فایل‌های پیوست:</span>
                                 <div class="d-flex flex-wrap gap-2">
                                     @foreach($ticket->attachments as $attachment)
-                                        <a href="{{ asset('storage/' . $attachment->file_path) }}" target="_blank" class="btn btn-white bg-white border border-primary border-opacity-25 text-primary btn-sm rounded-pill px-3 shadow-xs d-flex align-items-center gap-1">
+                                        {{-- 🔒 استفاده از روت امن دانلود به جای asset مستقیم --}}
+                                        <a href="{{ route('ticket.attachments.download', $attachment) }}" class="btn btn-white bg-white border border-primary border-opacity-25 text-primary btn-sm rounded-pill px-3 shadow-xs d-flex align-items-center gap-1">
                                             📎 {{ $attachment->file_name }}
                                         </a>
                                     @endforeach
@@ -135,7 +136,8 @@
                                     <span class="text-muted small d-block mb-2 fw-semibold">پیوست‌های پاسخ:</span>
                                     <div class="d-flex flex-wrap gap-2">
                                         @foreach($comment->attachments as $att)
-                                            <a href="{{ asset('storage/' . $att->file_path) }}" target="_blank" class="btn btn-light border btn-sm rounded-pill px-3 shadow-xs d-flex align-items-center gap-1 text-dark">
+                                            {{-- 🔒 استفاده از روت امن دانلود برای پیوست‌های کامنت --}}
+                                            <a href="{{ route('ticket.attachments.download', $att) }}" class="btn btn-light border btn-sm rounded-pill px-3 shadow-xs d-flex align-items-center gap-1 text-dark">
                                                 📎 {{ $att->file_name }}
                                             </a>
                                         @endforeach
