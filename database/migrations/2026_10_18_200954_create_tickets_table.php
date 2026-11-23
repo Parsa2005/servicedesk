@@ -9,29 +9,31 @@ return new class extends Migration {
     {
         Schema::create('tickets', function (Blueprint $table) {
             $table->id();
-            $table->string('tracking_code')->unique(); 
-            
-        
+            $table->string('tracking_code')->unique();
+
             $table->foreignId('company_id')->nullable()->constrained('companies')->nullOnDelete();
-            
-            
-            $table->foreignId('target_company_id')->nullable()->constrained('companies')->cascadeOnDelete(); 
+            $table->foreignId('target_company_id')->nullable()->constrained('companies')->cascadeOnDelete();
             $table->foreignId('department_id')->constrained()->cascadeOnDelete();
-            
             $table->foreignId('category_id')->constrained('ticket_categories')->cascadeOnDelete();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-            
-          
-            $table->foreignId('assigned_to')->nullable()->constrained('users')->nullOnDelete();            
-            
+            $table->foreignId('assigned_to')->nullable()->constrained('users')->nullOnDelete();
+
             $table->string('subject');
             $table->text('description');
-            
+
             $table->enum('priority', ['low', 'normal', 'high', 'critical'])->default('normal');
             $table->enum('status', ['open', 'pending', 'in_progress', 'resolved', 'closed'])->default('open');
-            
+
+            $table->timestamp('sla_started_at')->nullable();
             $table->timestamp('sla_due_at')->nullable();
+            $table->integer('last_sla_reminder_step')->default(-1);
+            $table->foreignId('sla_reminder_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('last_sla_reminder_at')->nullable();
+
             $table->timestamps();
+
+            $table->index(['status', 'sla_due_at']);
+            $table->index(['company_id', 'target_company_id']);
         });
     }
 

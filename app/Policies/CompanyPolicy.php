@@ -7,11 +7,7 @@ use App\Models\User;
 
 class CompanyPolicy
 {
-    /**
-     * بررسی اینکه آیا شرکت هدف در قلمرو مجاز کاربر قرار دارد یا خیر
-     * - creator: به همه شرکت‌ها دسترسی دارد
-     * - سایر کاربران دارای پرمیسن: فقط خود شرکت و شرکت‌های زیرمجموعه
-     */
+    
     protected function isCompanyInScope(User $user, Company $company): bool
     {
         if ($user->isCreator()) {

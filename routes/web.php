@@ -35,7 +35,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('user.notifications.index');
     
-    Route::get('/notifications/read-all', [NotificationController::class, 'readAll'])->name('user.notifications.readAll');
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('user.notifications.readAll');
 });
 
 // بارگذاری فایل‌های روت مجزا

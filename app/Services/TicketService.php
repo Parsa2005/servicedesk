@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\Ticket;
-use App\Models\User;
 use App\Models\Company;
 use App\Models\Sla;
+use App\Models\Ticket;
+use App\Models\User;
 use App\Notifications\TicketNotification;
 use Illuminate\Http\Request;
 
@@ -13,25 +13,27 @@ class TicketService
 {
     public function createTicket(Request $request, User $user): Ticket
     {
-        // 🕒 محاسبه داینامیک و آبشاری ساعت SLA
+        $now = now();
+
         $hoursToAdd = $this->resolveSlaHours(
-            $request->target_company_id, 
-            $user->company_id, 
+            $request->target_company_id,
+            $user->company_id,
             $request->priority
         );
 
         $ticket = Ticket::create([
-            'company_id'        => $user->company_id,      
-            'target_company_id' => $request->target_company_id, 
-            'user_id'           => $user->id,             
-            'department_id'     => $request->department_id, 
-            'assigned_to'       => $request->assigned_to, 
+            'company_id'        => $user->company_id,
+            'target_company_id' => $request->target_company_id,
+            'user_id'           => $user->id,
+            'department_id'     => $request->department_id,
+            'assigned_to'       => $request->assigned_to,
             'category_id'       => $request->category_id,
             'priority'          => $request->priority,
             'subject'           => $request->subject,
             'description'       => $request->message,
             'status'            => 'open',
-            'sla_due_at'        => now()->addHours($hoursToAdd),
+            'sla_started_at'    => $now,
+            'sla_due_at'        => $now->copy()->addHours($hoursToAdd),
             'notified_milestones' => [],
         ]);
 
@@ -46,34 +48,31 @@ class TicketService
             }
         }
 
-        if ($ticket->assigned_to && $ticket->assigned_to !== $user->id) {
-            $assignedUser = User::find($ticket->assigned_to);
-            if ($assignedUser) {
-                $assignedUser->notify(new TicketNotification($ticket, 'یک تیکت جدید با موضوع "' . $ticket->subject . '" به شما ارجاع داده شد.'));
-            }
-        }
-
         return $ticket;
     }
 
     public function updateTicket(Request $request, Ticket $ticket): Ticket
     {
-        // بروزرسانی زمان SLA در صورت تغییر شرکت مقصد یا اولویت تیکت
+        $now = now();
+
         $hoursToAdd = $this->resolveSlaHours(
-            $request->target_company_id, 
-            $ticket->company_id, 
+            $request->target_company_id,
+            $ticket->company_id,
             $request->priority
         );
 
         $ticket->update([
-            'target_company_id' => $request->target_company_id,
-            'department_id'     => $request->department_id,
-            'assigned_to'       => $request->assigned_to,
-            'category_id'       => $request->category_id,
-            'priority'          => $request->priority,
-            'subject'           => $request->subject,
-            'description'       => $request->message,
-            'sla_due_at'        => now()->addHours($hoursToAdd),
+            'target_company_id'      => $request->target_company_id,
+            'department_id'          => $request->department_id,
+            'assigned_to'            => $request->assigned_to,
+            'category_id'            => $request->category_id,
+            'priority'               => $request->priority,
+            'subject'                => $request->subject,
+            'description'            => $request->message,
+            'sla_started_at'         => $now,
+            'sla_due_at'             => $now->copy()->addHours($hoursToAdd),
+            'last_sla_reminder_step' => -1,
+            'last_sla_reminder_at'   => null,
         ]);
 
         if ($request->hasFile('attachments')) {
@@ -128,7 +127,7 @@ class TicketService
             $ticket->update(['status' => 'in_progress']);
         }
 
-        if ($ticket->user_id !== $authUser->id) {
+        if ($ticket->user_id !== $authUser->id && $ticket->user) {
             $ticket->user->notify(new TicketNotification($ticket, 'کاربر ' . $authUser->name . ' به تیکت شما پاسخ داد.'));
         }
 
@@ -142,24 +141,23 @@ class TicketService
         return [$ticket, $comment];
     }
 
-    
     protected function resolveSlaHours(?int $targetCompanyId, ?int $fallbackCompanyId, string $priority): int
     {
         $companyId = $targetCompanyId ?? $fallbackCompanyId;
 
         if ($companyId) {
             $company = Company::find($companyId);
-            
+
             while ($company) {
                 $sla = Sla::where('company_id', $company->id)
                     ->where('priority', $priority)
                     ->first();
 
                 if ($sla) {
-                    return $sla->hours;
+                    return (int) $sla->hours;
                 }
 
-                $company = $company->parent; 
+                $company = $company->parent;
             }
         }
 

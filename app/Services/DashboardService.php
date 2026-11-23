@@ -2,54 +2,72 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\Role;
 use App\Models\Ticket;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class DashboardService
 {
+    protected function isCompanyManager(User $authUser): bool
+    {
+        return $authUser->roles()->where('slug', 'company-manager')->exists();
+    }
+
     /**
-     * برگرداندن آرایه شناسه‌های شرکت مجاز:
-     * null = همه شرکت‌ها (فقط creator)
-     * array = خود شرکت + زیرمجموعه‌ها
+     * @return int[]|null null یعنی دسترسی کامل به همه شرکت‌ها (Creator)
      */
     protected function allowedCompanyIds(User $authUser): ?array
     {
-        if ($authUser->isCreator()) {
+        if ($authUser->level === 'creator' || (method_exists($authUser, 'isCreator') && $authUser->isCreator())) {
             return null;
         }
 
-        if ($authUser->company) {
-            return $authUser->company->getDescendantCompanyIds();
+        if ($this->isCompanyManager($authUser) && $authUser->company) {
+            return array_map('intval', $authUser->company->getDescendantCompanyIds());
         }
 
         return $authUser->company_id ? [(int) $authUser->company_id] : [];
     }
 
-    /**
-     * محاسبه آمارهای داشبورد مدیریت با احتساب سطح دسترسی و قلمرو شرکت‌ها
-     */
+    protected function applyTicketCompanyScope($query, ?array $allowedIds)
+    {
+        if ($allowedIds === null) {
+            return $query;
+        }
+
+        if (empty($allowedIds)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function ($q) use ($allowedIds) {
+            $q->whereIn('company_id', $allowedIds)
+              ->orWhereIn('target_company_id', $allowedIds);
+        });
+    }
+
     public function getDashboardStats(User $authUser): array
     {
         $allowedIds = $this->allowedCompanyIds($authUser);
 
         $userQuery = User::query();
-        $ticketQuery = Ticket::query();
+        $ticketQuery = $this->applyTicketCompanyScope(Ticket::query(), $allowedIds);
         $roleQuery = Role::query();
 
         if ($allowedIds !== null) {
-            $userQuery->whereIn('company_id', $allowedIds);
+            if (empty($allowedIds)) {
+                $userQuery->whereRaw('1 = 0');
+                $roleQuery->whereRaw('1 = 0');
+            } else {
+                $userQuery->whereIn('company_id', $allowedIds);
 
-            $ticketQuery->where(function ($q) use ($allowedIds) {
-                $q->whereIn('company_id', $allowedIds)
-                  ->orWhereIn('target_company_id', $allowedIds);
-            });
-
-            $roleQuery->where(function ($q) use ($allowedIds) {
-                $q->whereIn('company_id', $allowedIds)
-                  ->orWhereNull('company_id');
-            });
+                $roleQuery->where(function ($q) use ($allowedIds) {
+                    $q->whereIn('company_id', $allowedIds)
+                      ->orWhereNull('company_id');
+                });
+            }
         }
 
         $stats = [
@@ -60,40 +78,65 @@ class DashboardService
             'roles_count'  => (clone $roleQuery)->count(),
         ];
 
-        $today = Carbon::today();
-
-        $ticketStats = [
-            'open_today'         => (clone $ticketQuery)->whereDate('created_at', $today)->where('status', 'open')->count(),
-            'in_progress_today'  => (clone $ticketQuery)->whereDate('created_at', $today)->where('status', 'in_progress')->count(),
-            'resolved_today'     => (clone $ticketQuery)->whereDate('created_at', $today)->where('status', 'resolved')->count(),
-            'closed_today'       => (clone $ticketQuery)->whereDate('created_at', $today)->where('status', 'closed')->count(),
-            'overdue_count'      => (clone $ticketQuery)->where('status', '!=', 'closed')->where('sla_due_at', '<', now())->count(),
-            'by_status'          => (clone $ticketQuery)->selectRaw('status, count(*) as count')->groupBy('status')->pluck('count', 'status'),
-            'by_priority'        => (clone $ticketQuery)->selectRaw('priority, count(*) as count')->groupBy('priority')->pluck('count', 'priority'),
-            'sla_met_percentage' => $this->calculateSlaPercentage($ticketQuery),
-        ];
-
         return [
             'stats'       => $stats,
-            'ticketStats' => $ticketStats,
+            'ticketStats' => $this->buildTicketStats($ticketQuery),
         ];
     }
 
-    /**
-     * محاسبه آمارهای مخصوص بخش گزارشات
-     */
-    public function getReportStats(User $authUser): array
+    public function getReportStats(User $authUser, ?Request $request = null): array
     {
+        $request = $request ?? request();
         $allowedIds = $this->allowedCompanyIds($authUser);
-        $ticketQuery = Ticket::query();
 
-        if ($allowedIds !== null) {
-            $ticketQuery->where(function ($q) use ($allowedIds) {
-                $q->whereIn('company_id', $allowedIds)
-                  ->orWhereIn('target_company_id', $allowedIds);
-            });
+        $ticketQuery = $this->applyTicketCompanyScope(Ticket::query(), $allowedIds);
+
+        // فیلتر اختیاری بر اساس یک شرکت خاص در محدوده مجاز کاربر
+        if ($request->filled('company_id')) {
+            $requestedCompanyId = (int) $request->input('company_id');
+            if ($allowedIds === null || in_array($requestedCompanyId, $allowedIds, true)) {
+                $ticketQuery->where(function ($q) use ($requestedCompanyId) {
+                    $q->where('company_id', $requestedCompanyId)
+                      ->orWhere('target_company_id', $requestedCompanyId);
+                });
+            }
         }
 
+        // فیلتر اختیاری وضعیت
+        if ($request->filled('status')) {
+            $ticketQuery->where('status', $request->input('status'));
+        }
+
+        $ticketStats = $this->buildTicketStats($ticketQuery);
+
+        $reportTickets = (clone $ticketQuery)
+            ->with(['user', 'assigned', 'company', 'department', 'category'])
+            ->latest()
+            ->paginate(15)
+            ->withQueryString();
+
+        $companiesQuery = Company::query()->orderBy('name');
+        if ($allowedIds !== null) {
+            if (empty($allowedIds)) {
+                $companiesQuery->whereRaw('1 = 0');
+            } else {
+                $companiesQuery->whereIn('id', $allowedIds);
+            }
+        }
+
+        return [
+            'ticketStats'   => $ticketStats,
+            'reportTickets' => $reportTickets,
+            'companies'     => $companiesQuery->get(),
+            'filters'       => [
+                'company_id' => $request->input('company_id'),
+                'status'     => $request->input('status'),
+            ],
+        ];
+    }
+
+    protected function buildTicketStats($ticketQuery): array
+    {
         $today = Carbon::today();
 
         return [
@@ -101,24 +144,33 @@ class DashboardService
             'in_progress_today'  => (clone $ticketQuery)->whereDate('created_at', $today)->where('status', 'in_progress')->count(),
             'resolved_today'     => (clone $ticketQuery)->whereDate('created_at', $today)->where('status', 'resolved')->count(),
             'closed_today'       => (clone $ticketQuery)->whereDate('created_at', $today)->where('status', 'closed')->count(),
-            'overdue_count'      => (clone $ticketQuery)->where('status', '!=', 'closed')->where('sla_due_at', '<', now())->count(),
-            'by_status'          => (clone $ticketQuery)->selectRaw('status, count(*) as count')->groupBy('status')->pluck('count', 'status'),
-            'by_priority'        => (clone $ticketQuery)->selectRaw('priority, count(*) as count')->groupBy('priority')->pluck('count', 'priority'),
+            'overdue_count'      => (clone $ticketQuery)->whereNotIn('status', ['resolved', 'closed'])
+                ->whereNotNull('sla_due_at')
+                ->where('sla_due_at', '<', now())
+                ->count(),
+            'by_status'          => (clone $ticketQuery)->selectRaw('status, count(*) as count')->groupBy('status')->pluck('count', 'status')->toArray(),
+            'by_priority'        => (clone $ticketQuery)->selectRaw('priority, count(*) as count')->groupBy('priority')->pluck('count', 'priority')->toArray(),
             'sla_met_percentage' => $this->calculateSlaPercentage($ticketQuery),
         ];
     }
 
     protected function calculateSlaPercentage($ticketQuery): int
     {
-        $totalResolvedOrClosed = (clone $ticketQuery)->whereIn('status', ['resolved', 'closed'])->count();
-        if ($totalResolvedOrClosed === 0) {
-            return 100;
+        $totalWithSla = (clone $ticketQuery)
+            ->whereIn('status', ['resolved', 'closed'])
+            ->whereNotNull('sla_due_at')
+            ->count();
+
+        if ($totalWithSla === 0) {
+            return 0;
         }
 
-        $metSla = (clone $ticketQuery)->whereIn('status', ['resolved', 'closed'])
+        $metSla = (clone $ticketQuery)
+            ->whereIn('status', ['resolved', 'closed'])
+            ->whereNotNull('sla_due_at')
             ->whereColumn('updated_at', '<=', 'sla_due_at')
             ->count();
 
-        return (int) round(($metSla / $totalResolvedOrClosed) * 100);
+        return (int) round(($metSla / $totalWithSla) * 100);
     }
 }

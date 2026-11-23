@@ -7,9 +7,7 @@ use App\Models\User;
 
 class SlaPolicy
 {
-    /**
-     * بررسی اینکه آیا کاربر نقش مدیر شرکت را دارد یا خیر
-     */
+    
     protected function isCompanyManager(User $user): bool
     {
         return $user->roles()->where('slug', 'company-manager')->exists()

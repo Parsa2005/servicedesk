@@ -114,7 +114,10 @@ class PanelTicketService
         }
 
         $ticket->update([
-            'assigned_to' => $targetUser->id,
+            'assigned_to'            => $targetUser->id,
+            'last_sla_reminder_step' => -1,
+            'sla_reminder_user_id'   => $targetUser->id,
+            'last_sla_reminder_at'   => null,
         ]);
 
         if ($ticket->status === 'open') {
@@ -128,7 +131,7 @@ class PanelTicketService
     {
         $comment = $ticket->comments()->create([
             'user_id' => $authUser->id,
-            'body'    => $request->body,
+            'message' => $request->body,
         ]);
 
         if ($request->hasFile('attachment')) {
@@ -148,13 +151,18 @@ class PanelTicketService
 
     public function updateTicket(Request $request, Ticket $ticket): void
     {
+        $now = now();
+
         $ticket->update([
-            'target_company_id' => $request->target_company_id,
-            'department_id'     => $request->department_id,
-            'category_id'       => $request->category_id,
-            'priority'          => $request->priority,
-            'subject'           => $request->subject,
-            'description'       => $request->message,
+            'target_company_id'      => $request->target_company_id,
+            'department_id'          => $request->department_id,
+            'category_id'            => $request->category_id,
+            'priority'               => $request->priority,
+            'subject'                => $request->subject,
+            'description'            => $request->message,
+            'sla_started_at'         => $now,
+            'last_sla_reminder_step' => -1,
+            'last_sla_reminder_at'   => null,
         ]);
 
         if ($request->hasFile('attachment')) {

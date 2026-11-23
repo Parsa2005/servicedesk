@@ -20,9 +20,7 @@ class TicketCategory extends Model
         return $this->hasMany(Ticket::class, 'category_id');
     }
 
-    /**
-     * ارتباط با شرکت
-     */
+    
     public function company()
     {
         return $this->belongsTo(Company::class);

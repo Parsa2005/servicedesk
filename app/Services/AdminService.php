@@ -12,11 +12,6 @@ class AdminService
         return $user->roles()->where('slug', 'company-manager')->exists();
     }
 
-    /**
-     * null = همه شرکت‌ها (فقط creator)
-     * array = خود شرکت + زیرمجموعه‌ها (برای company-manager)
-     * int = فقط شرکت خودش (برای سایر کاربران)
-     */
     protected function resolveCompanyScope(User $authUser): null|array|int
     {
         if ($authUser->level === 'creator' || (method_exists($authUser, 'isCreator') && $authUser->isCreator())) {

@@ -22,14 +22,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // ۱. سازنده سیستم (Creator) همیشه دسترسی کامل دارد (بایپس کردن تمام گیت‌ها)
         Gate::before(function ($user, $ability) {
             if (in_array($user->level, ['creator', 'admin'], true)) {
                 return true;
             }
         });
 
-        // ۲. ثبت داینامیک گیت‌ها برای بررسی پرمیشن‌های ادمین‌ها و سایر نقش‌ها
         try {
             if (Schema::hasTable('permissions')) {
                 foreach (Permission::all() as $permission) {
@@ -39,7 +37,7 @@ class AppServiceProvider extends ServiceProvider
                 }
             }
         } catch (\Exception $e) {
-            // مدیریت خطاهای احتمالی اتصال به دیتابیس
+            //
         }
     }
 }

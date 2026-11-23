@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\User;
 use App\Http\Requests\StoreTicketRequest;
 use App\Http\Requests\StoreCommentRequest;
+use App\Services\SlaReminderService;
 use App\Services\TicketService;
 use App\Notifications\TicketNotification;
 use Illuminate\Http\Request;
@@ -31,15 +32,21 @@ class TicketController extends Controller
         $this->authorize('viewAny', Ticket::class);
 
         $user = auth()->user();
+        $isManager = $user->roles()->where('slug', 'company-manager')->exists();
+
+        $allowedCompanyIds = ($isManager && $user->company)
+            ? $user->company->getDescendantCompanyIds()
+            : ($user->company_id ? [(int) $user->company_id] : []);
 
         $query = Ticket::with(['category', 'department', 'company', 'targetCompany', 'assigned', 'user'])
-            ->where(function ($q) use ($user) {
-                if ($user->company_id) {
-                    $q->where('company_id', $user->company_id)
-                        ->orWhere('target_company_id', $user->company_id)
+            ->where(function ($q) use ($user, $allowedCompanyIds) {
+                if (!empty($allowedCompanyIds)) {
+                    $q->whereIn('company_id', $allowedCompanyIds)
+                        ->orWhereIn('target_company_id', $allowedCompanyIds)
                         ->orWhere('assigned_to', $user->id);
                 } else {
-                    $q->where('user_id', $user->id);
+                    $q->where('user_id', $user->id)
+                        ->orWhere('assigned_to', $user->id);
                 }
             });
 
@@ -83,6 +90,10 @@ class TicketController extends Controller
 
         $ticket = $this->ticketService->createTicket($request, auth()->user());
 
+        if ($ticket instanceof Ticket && $ticket->assigned_to && $ticket->sla_due_at) {
+            app(SlaReminderService::class)->sendInitialReminder($ticket->fresh());
+        }
+
         if ($request->expectsJson()) {
             return response()->json([
                 'status'  => true,
@@ -97,7 +108,7 @@ class TicketController extends Controller
     public function show(Ticket $ticket, Request $request)
     {
         $this->authorize('view', $ticket);
-        
+
         auth()->user()->unreadNotifications()
             ->where('data->ticket_id', $ticket->id)
             ->update(['read_at' => now()]);
@@ -110,11 +121,11 @@ class TicketController extends Controller
             return response()->json(['status' => true, 'data' => $ticket]);
         }
 
-        $rootCompany = $ticket->targetCompany 
-            ? $ticket->targetCompany->getRootCompany() 
+        $rootCompany = $ticket->targetCompany
+            ? $ticket->targetCompany->getRootCompany()
             : ($ticket->company ? $ticket->company->getRootCompany() : null);
 
-        $assignableUsers = $rootCompany 
+        $assignableUsers = $rootCompany
             ? User::whereIn('company_id', $rootCompany->getGroupCompanies()->pluck('id'))->whereNotNull('department_id')->get()
             : User::where('company_id', $ticket->target_company_id)->whereNotNull('department_id')->get();
 
@@ -156,9 +167,6 @@ class TicketController extends Controller
             ->with('success', 'تیکت با موفقیت ویرایش شد.');
     }
 
-    /**
-     * 💬 ثبت پاسخ تمیز و کاملاً مدیریت‌شده از طریق Form Request و Service
-     */
     public function storeComment(StoreCommentRequest $request, Ticket $ticket)
     {
         list($updatedTicket, $comment) = $this->ticketService->addComment($request, $ticket, auth()->user());

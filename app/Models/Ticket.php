@@ -85,9 +85,7 @@ class Ticket extends Model // یا همان Ticket شما
         };
     }
 
-    /**
-     * کلاس رنگی (Bootstrap Badge) مربوط به هر وضعیت
-     */
+   
     public function getStatusBadgeAttribute()
     {
         return match($this->status) {

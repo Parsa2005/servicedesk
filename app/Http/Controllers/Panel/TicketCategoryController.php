@@ -11,9 +11,7 @@ use Illuminate\Support\Str;
 
 class TicketCategoryController extends Controller
 {
-    /**
-     * نمایش لیست دسته‌بندی‌ها با ایزوله‌سازی Multi-Tenant
-     */
+    
     public function index(Request $request)
     {
         // 🛡️ بررسی مجوز مشاهده لیست
@@ -42,9 +40,7 @@ class TicketCategoryController extends Controller
         return view('panel.categories.index', compact('categories', 'companies'));
     }
 
-    /**
-     * فرم ایجاد دسته‌بندی جدید
-     */
+    
     public function create()
     {
         // 🛡️ بررسی مجوز ایجاد
@@ -56,9 +52,7 @@ class TicketCategoryController extends Controller
         return view('panel.categories.create', compact('companies'));
     }
 
-    /**
-     * ذخیره دسته‌بندی جدید با انتساب هوشمند به شرکت و بررسی عدم تکرار
-     */
+    
     public function store(Request $request)
     {
         // 🛡️ بررسی مجوز ایجاد
@@ -110,9 +104,7 @@ class TicketCategoryController extends Controller
             ->with('success', 'دسته‌بندی جدید با موفقیت ایجاد شد.');
     }
 
-    /**
-     * فرم ویرایش دسته‌بندی با بررسی امنیت Multi-Tenant
-     */
+    
     public function edit(TicketCategory $category)
     {
         // 🛡️ بررسی مجوز ویرایش
@@ -130,9 +122,7 @@ class TicketCategoryController extends Controller
         return view('panel.categories.edit', compact('category', 'companies'));
     }
 
-    /**
-     * بروزرسانی دسته‌بندی با بررسی یکتا بودن نام در شرکت
-     */
+    
     public function update(Request $request, TicketCategory $category)
     {
         // 🛡️ بررسی مجوز ویرایش
@@ -184,9 +174,7 @@ class TicketCategoryController extends Controller
             ->with('success', 'دسته‌بندی با موفقیت به‌روزرسانی شد.');
     }
 
-    /**
-     * حذف دسته‌بندی با بررسی وابستگی‌ها
-     */
+    
     public function destroy(TicketCategory $category)
     {
         // 🛡️ بررسی مجوز حذف

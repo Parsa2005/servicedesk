@@ -7,11 +7,7 @@ use App\Models\User;
 
 class CompanyService
 {
-    /**
-     * برگرداندن ID شرکت‌های مجاز:
-     * null = همه شرکت‌ها (فقط creator)
-     * array = خود شرکت + زیرمجموعه‌ها
-     */
+    
     protected function allowedCompanyIds(?User $user): ?array
     {
         $user = $user ?? auth()->user();

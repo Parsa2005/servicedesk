@@ -25,11 +25,7 @@ class MembershipController extends Controller
         return $user->roles()->where('slug', 'company-manager')->exists();
     }
 
-    /**
-     * null = همه شرکت‌ها (فقط creator)
-     * array = خود شرکت + زیرمجموعه‌ها (برای company-manager)
-     * int = فقط شرکت خودش (برای سایر کاربران)
-     */
+    
     protected function resolveCompanyScope(User $user): null|array|int
     {
         if ($this->isCreator($user)) {
@@ -62,9 +58,6 @@ class MembershipController extends Controller
         return (int) $scope === (int) $companyId;
     }
 
-    /**
-     * نمایش لیست کاربران و اعضای سازمان با ایزوله‌سازی Multi-Tenant
-     */
     public function index(Request $request)
     {
         $this->authorize('viewAny', User::class);
@@ -127,9 +120,7 @@ class MembershipController extends Controller
         return view('panel.membership.index', compact('users', 'companies', 'departments'));
     }
 
-    /**
-     * فرم ویرایش عضویت کاربر (پشتیبانی از جستجو با اسلاگ یا آیدی)
-     */
+    
     public function edit(User $user)
     {
         $this->authorize('update', $user);
@@ -164,9 +155,7 @@ class MembershipController extends Controller
         return view('panel.membership.edit', compact('user', 'roles', 'departments', 'companies'));
     }
 
-    /**
-     * بروزرسانی اطلاعات عضویت، دپارتمان و نقش‌های کاربر (سازگار با مودال و فرم کامل)
-     */
+    
     public function update(Request $request, User $user)
     {
         $this->authorize('update', $user);

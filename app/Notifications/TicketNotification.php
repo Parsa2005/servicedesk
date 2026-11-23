@@ -18,20 +18,19 @@ class TicketNotification extends Notification
         $this->messageText = $messageText;
     }
 
-    // ذخیره اعلان در دیتابیس
     public function via($notifiable)
     {
         return ['database'];
     }
 
-    // داده‌هایی که درون دیتابیس (فیلد data) ذخیره می‌شوند
     public function toArray($notifiable)
     {
         return [
-            'ticket_id' => $this->ticket->id,
-            'subject'   => $this->ticket->subject,
-            'message'   => $this->messageText,
-            'url'       => route('user.tickets.show', $this->ticket->id),
+            'ticket_id'  => $this->ticket->id,
+            'company_id' => $this->ticket->target_company_id ?? $this->ticket->company_id,
+            'subject'    => $this->ticket->subject,
+            'message'    => $this->messageText,
+            'url'        => route('user.tickets.show', $this->ticket->id),
         ];
     }
 }

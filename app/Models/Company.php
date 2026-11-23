@@ -85,9 +85,7 @@ class Company extends Model
         return Company::whereIn('id', $ids)->get();
     }
 
-    /**
-     * شناسه خود این شرکت به همراه تمام زیرمجموعه‌های مستقیم و غیرمستقیم آن
-     */
+   
     public function getDescendantCompanyIds(): array
     {
         $ids = [(int) $this->id];
@@ -109,9 +107,7 @@ class Company extends Model
         return $ids;
     }
 
-    /**
-     * مجموعه شرکت‌های شامل خود این شرکت و زیرمجموعه‌هایش
-     */
+    
     public function getDescendantCompanies(): Collection
     {
         return static::whereIn('id', $this->getDescendantCompanyIds())

@@ -35,9 +35,7 @@ class DepartmentRequest extends FormRequest
         ];
     }
 
-    /**
-     * پاکسازی و آماده‌سازی داده‌های معتبر شده
-     */
+    
     public function validatedData(): array
     {
         $data = $this->validated();

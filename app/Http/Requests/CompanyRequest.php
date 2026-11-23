@@ -38,9 +38,7 @@ class CompanyRequest extends FormRequest
         ];
     }
 
-    /**
-     * آماده‌سازی داده‌های معتبر شده (اسلاگ و بولین)
-     */
+   
     public function validatedData(): array
     {
         $data = $this->validated();

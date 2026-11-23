@@ -10,10 +10,9 @@ return new class extends Migration
     {
         Schema::create('slas', function (Blueprint $table) {
             $table->id();
-            // اگر company_id خالی باشد یعنی پیش‌فرض کل سیستم است
             $table->foreignId('company_id')->nullable()->constrained('companies')->onDelete('cascade');
             $table->enum('priority', ['low', 'normal', 'high', 'critical']);
-            $table->unsignedInteger('hours'); // تعداد ساعات SLA
+            $table->unsignedInteger('hours'); 
             $table->timestamps();
 
             $table->unique(['company_id', 'priority']);

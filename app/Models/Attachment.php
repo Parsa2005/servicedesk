@@ -21,8 +21,8 @@ class Attachment extends Model
         return $this->belongsTo(Ticket::class);
     }
 
-    public function reply(): BelongsTo
-    {
-        return $this->belongsTo(TicketReply::class, 'ticket_reply_id');
-    }
+    // public function reply(): BelongsTo
+    // {
+    //     return $this->belongsTo(TicketReply::class, 'ticket_reply_id');
+    // }
 }
