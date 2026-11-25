@@ -27,7 +27,7 @@ class AdminController extends Controller
         $this->authorize('viewAny', User::class);
 
         $users = $this->adminService->getFilteredUsers($request, auth()->user());
-        $companies = Company::all();
+        $companies = Company::orderBy('name')->get();
 
         return view('panel.users.index', compact('users', 'companies'));
     }
