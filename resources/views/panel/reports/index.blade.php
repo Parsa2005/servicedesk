@@ -14,7 +14,7 @@
 </div>
 
 <!-- فیلتر شرکت و وضعیت -->
-<form method="GET" action="{{ route('panel.reports') }}" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6 flex flex-wrap items-center gap-3">
+<form method="GET" action="{{ route('panel.reports.index') }}" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6 flex flex-wrap items-center gap-3">
     <select name="company_id" class="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-slate-50 focus:outline-none">
         <option value="">همه شرکت‌های مجاز</option>
         @foreach($companies ?? [] as $company)
@@ -37,7 +37,7 @@
     </button>
 
     @if(!empty($filters['company_id']) || !empty($filters['status']))
-        <a href="{{ route('panel.reports') }}" class="text-xs text-slate-500 hover:text-slate-700 underline">
+        <a href="{{ route('panel.reports.index') }}" class="text-xs text-slate-500 hover:text-slate-700 underline">
             پاک‌سازی فیلتر
         </a>
     @endif
